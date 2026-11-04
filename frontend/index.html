@@ -7,45 +7,64 @@
     <style>
         body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
         .container { max-width: 1200px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #334155; padding-bottom: 16px; margin-bottom: 24px; }
+        header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 2px solid #334155; padding-bottom: 16px; margin-bottom: 24px; }
         h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff; }
         p.subtitle { margin: 4px 0 0 0; font-size: 13px; color: #94a3b8; }
-        .csv-btn { background-color: #4f46e5; color: white; text-decoration: none; font-weight: bold; padding: 10px 18px; font-size: 14px; border-radius: 6px; transition: 0.2s; display: inline-block; }
+        .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .csv-btn { background-color: #4f46e5; color: white; border: none; text-decoration: none; font-weight: bold; padding: 10px 18px; font-size: 14px; border-radius: 6px; transition: 0.2s; cursor: pointer; }
         .csv-btn:hover { background-color: #4338ca; }
-        
+        .ghost-btn { background: transparent; color: #cbd5e1; border: 1px solid #475569; padding: 9px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; }
+        .ghost-btn:hover { border-color: #94a3b8; color: #fff; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .banner { display: none; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        .banner.show { display: block; }
+        .banner.error { background: #450a0a; border: 1px solid #991b1b; color: #fecaca; }
+        .banner.ok { background: #052e16; border: 1px solid #166534; color: #bbf7d0; }
+        .banner code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; }
+
         .map-section { background-color: #1e293b; border: 1px solid #475569; border-radius: 12px; padding: 16px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
         .map-title-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: bold; font-size: 16px; color: #ffffff; }
         .map-pulse { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #ef4444; }
         .map-canvas { width: 100%; height: 350px; background-color: #111827; border-radius: 8px; position: relative; overflow: hidden; border: 1px solid #334155; }
-        
         .map-bg-grid { position: absolute; width: 100%; height: 100%; opacity: 0.15; background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 16px 16px; }
-        .map-pin { position: absolute; cursor: pointer; transform: translate(-50%, -100%); transition: 0.2s; }
-        .map-pin:hover { transform: translate(-50%, -100%) scale(1.2); }
+        .map-pin { position: absolute; cursor: pointer; transform: translate(-50%, -100%); transition: 0.2s; background: none; border: none; padding: 0; }
+        .map-pin:hover, .map-pin.active { transform: translate(-50%, -100%) scale(1.2); }
         .pin-icon { font-size: 24px; }
         .pin-label { position: absolute; background: #0f172a; border: 1px solid #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; white-space: nowrap; top: -20px; left: 50%; transform: translateX(-50%); box-shadow: 0 2px 4px rgba(0,0,0,0.5); color: #ffffff; }
-        
+        .map-pin.active .pin-label { border-color: #6366f1; }
+
         .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
+        @media (max-width: 860px) { .dashboard-grid { grid-template-columns: 1fr; } body { padding: 16px; } }
         .card { background-color: #1e293b; border: 1px solid #475569; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
         h2 { margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #ffffff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
-        
-        .ticket-item { display: flex; justify-content: space-between; align-items: center; padding: 14px; background: rgba(51, 65, 85, 0.3); border: 1px solid #334155; border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
+
+        .ticket-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; background: rgba(51, 65, 85, 0.3); border: 1px solid #334155; border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
         .ticket-item:hover { background: rgba(51, 65, 85, 0.5); border-color: #475569; }
+        .ticket-item.active { border-color: #6366f1; background: rgba(99, 102, 241, 0.12); }
         .status-badge { font-family: monospace; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
         .status-pending { background-color: #7c2d12; color: #fdba74; border: 1px solid #9a3412; }
         .status-dispatched { background-color: #1e3a8a; color: #93c5fd; border: 1px solid #1e40af; }
+        .status-closed { background-color: #14532d; color: #86efac; border: 1px solid #166534; }
         .tech-name { font-size: 16px; font-weight: bold; color: #ffffff; margin: 2px 0; }
         .ticket-details { font-size: 13px; color: #cbd5e1; }
-        .right-align { text-align: right; }
+        .right-align { text-align: right; white-space: nowrap; }
         .price-bold { font-family: monospace; font-size: 16px; font-weight: bold; color: #34d399; }
-        
+        .empty { color: #94a3b8; font-size: 14px; padding: 12px 0; }
+
         .form-group { margin-bottom: 16px; }
         label { display: block; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px; }
         .num-input { width: 100%; background: #0f172a; border: 1px solid #475569; padding: 10px; color: white; font-family: monospace; font-size: 15px; border-radius: 6px; box-sizing: border-box; }
+        .num-input:disabled { opacity: 0.6; }
+        .num-input.invalid { border-color: #ef4444; }
         .slider-input { width: 100%; margin: 8px 0; accent-color: #6366f1; cursor: pointer; }
         .calc-row { display: flex; justify-content: space-between; font-size: 14px; color: #cbd5e1; padding: 8px 0; }
+        .calc-row span:last-child { font-family: monospace; }
         .calc-total { font-weight: bold; font-size: 16px; color: #34d399; border-top: 1px solid #334155; padding-top: 12px; margin-top: 8px; }
-        .submit-btn { width: 100%; background-color: #059669; color: white; border: none; font-weight: bold; padding: 12px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 16px; transition: 0.2s; }
-        .submit-btn:hover { background-color: #047857; }
+        .form-error { color: #fca5a5; font-size: 13px; min-height: 18px; margin-top: 8px; }
+        .submit-btn { width: 100%; background-color: #059669; color: white; border: none; font-weight: bold; padding: 12px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 8px; transition: 0.2s; }
+        .submit-btn:hover:not(:disabled) { background-color: #047857; }
+        .dispatch-btn { width: 100%; margin-top: 8px; }
     </style>
 </head>
 <body>
@@ -54,99 +73,282 @@
         <header>
             <div>
                 <h1>LOCK-OPS CONTROLLER</h1>
-                <p class="subtitle">US National Field Dispatch & Live Splitting Core Dashboard</p>
+                <p class="subtitle">US National Field Dispatch &amp; Live Splitting Core Dashboard</p>
             </div>
-            <a href="https://onrender.com" target="_blank" class="csv-btn">
-                📥 Download Sheet (.CSV)
-            </a>
+            <div class="header-actions">
+                <button type="button" class="ghost-btn" onclick="configureApi()" title="Change backend URL / API key">⚙️ API</button>
+                <button type="button" class="ghost-btn" onclick="loadOrders()">↻ Refresh</button>
+                <button type="button" class="csv-btn" id="csv-btn" onclick="downloadCsv()">📥 Download Sheet (.CSV)</button>
+            </div>
         </header>
+
+        <div id="banner" class="banner" role="status"></div>
 
         <section class="map-section">
             <div class="map-title-bar">
                 <span class="map-pulse"></span>
                 <span>Live US Field Operations Map View</span>
             </div>
-            <div class="map-canvas">
+            <div class="map-canvas" id="map-canvas">
                 <div class="map-bg-grid"></div>
-                
-                <div class="map-pin" style="top: 65%; left: 55%;" onclick="selectTicket('10943', 'Marcus K.', 350, 80)">
-                    <span class="pin-label">Marcus K. (#10943)</span>
-                    <span class="pin-icon">📍</span>
-                </div>
-                
-                <div class="map-pin" style="top: 78%; left: 78%;" onclick="selectTicket('10944', 'Alex R.', 180, 0)">
-                    <span class="pin-label">Alex R. (#10944)</span>
-                    <span class="pin-icon">📍</span>
-                </div>
-
-                <div class="map-pin" style="top: 55%; left: 15%;" onclick="selectTicket('10945', 'Dave J.', 420, 110)">
-                    <span class="pin-label">Dave J. (#10945)</span>
-                    <span class="pin-icon">📍</span>
-                </div>
             </div>
         </section>
 
         <div class="dashboard-grid">
             <div class="card">
                 <h2>📥 Live Operations Influx Stream (Active US Database)</h2>
-                <div>
-                    <div class="ticket-item" onclick="selectTicket('10943', 'Marcus K.', 350, 80)">
-                        <div>
-                            <span class="status-badge status-pending">Review Pending</span>
-                            <div class="tech-name">📍 Austin, TX — Marcus K.</div>
-                            <div class="ticket-details">Ticket #10943 | Issue: Yale Assure screen sun damage</div>
-                        </div>
-                        <div class="right-align">
-                            <span class="ticket-details">Gross Collected</span>
-                            <div class="price-bold">$350.00</div>
-                        </div>
-                    </div>
-
-                    <div class="ticket-item" onclick="selectTicket('10944', 'Alex R.', 180, 0)">
-                        <div>
-                            <span class="status-badge status-dispatched">Dispatched</span>
-                            <div class="tech-name">📍 Miami, FL — Alex R.</div>
-                            <div class="ticket-details">Ticket #10944 | Issue: High security smart lock programming</div>
-                        </div>
-                        <div class="right-align">
-                            <span class="ticket-details">Gross Collected</span>
-                            <div class="price-bold">$180.00</div>
-                        </div>
-                    </div>
-
-                    <div class="ticket-item" onclick="selectTicket('10945', 'Dave J.', 420, 110)">
-                        <div>
-                            <span class="status-badge status-pending">Review Pending</span>
-                            <div class="tech-name">📍 Los Angeles, CA — Dave J.</div>
-                            <div class="ticket-details">Ticket #10945 | Issue: Full residential lock core rebuilds</div>
-                        </div>
-                        <div class="right-align">
-                            <span class="ticket-details">Gross Collected</span>
-                            <div class="price-bold">$420.00</div>
-                        </div>
-                    </div>
-                </div>
+                <div id="ticket-list"><div class="empty">Loading jobs…</div></div>
             </div>
 
             <div class="card">
                 <h2>⚙️ Custom Rule Inspector</h2>
                 <div class="form-group">
                     <label>Selected Ticket Reference</label>
-                    <div id="inspector-ticket-id" style="font-family: monospace; font-size: 16px; font-weight: bold; color: #ffffff; padding: 4px 0;">#10943 (Marcus K.)</div>
+                    <div id="inspector-ticket-id" style="font-family: monospace; font-size: 16px; font-weight: bold; color: #ffffff; padding: 4px 0;">—</div>
+                    <div id="inspector-notes" class="ticket-details"></div>
                 </div>
 
                 <div class="form-group">
-                    <label>Gross Collected Payment ($)</label>
-                    <input type="number" id="gross-input" value="350" class="num-input" oninput="runCalculations()" />
+                    <label for="gross-input">Gross Collected Payment ($)</label>
+                    <input type="number" id="gross-input" min="0" step="0.01" class="num-input" oninput="runCalculations()" />
                 </div>
 
                 <div class="form-group">
-                    <label>Technician Part Costs Reimbursement ($)</label>
-                    <input type="number" id="parts-input" value="80" class="num-input" oninput="runCalculations()" />
+                    <label for="parts-input">Technician Part Costs Reimbursement ($)</label>
+                    <input type="number" id="parts-input" min="0" step="0.01" class="num-input" oninput="runCalculations()" />
                 </div>
 
                 <div class="form-group">
                     <div style="display: flex; justify-content: space-between;">
-                        <label>Company Allocation Share</label>
+                        <label for="rate-input">Company Allocation Share</label>
                         <span id="rate-display" style="font-family: monospace; color: #6366f1; font-weight: bold;">30%</span>
                     </div>
+                    <input type="range" id="rate-input" min="0" max="100" step="1" value="30" class="slider-input" oninput="runCalculations()" />
+                </div>
+
+                <div class="calc-row"><span>Net after parts</span><span id="calc-net">$0.00</span></div>
+                <div class="calc-row"><span>Company remittance due</span><span id="calc-company">$0.00</span></div>
+                <div class="calc-row calc-total"><span>Technician payout</span><span id="calc-tech">$0.00</span></div>
+
+                <div id="form-error" class="form-error"></div>
+                <button type="button" id="finalize-btn" class="submit-btn" onclick="finalizeSplit()">✅ Finalize &amp; Close Ticket</button>
+                <button type="button" id="dispatch-btn" class="ghost-btn dispatch-btn" onclick="dispatchDiscord()">📣 Send Discord Dispatch Alert</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ---- API config -------------------------------------------------------------
+        // Priority: ?api=… in the URL  →  saved setting  →  localhost:5000 (local dev)
+        const DEFAULT_API = 'http://localhost:5000';
+        function storageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+        function storageSet(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} }
+
+        const params = new URLSearchParams(location.search);
+        if (params.get('api')) storageSet('lockops.api', params.get('api'));
+        let API_BASE = (storageGet('lockops.api') || DEFAULT_API).replace(/\/+$/, '');
+        let API_KEY = storageGet('lockops.key') || '';
+
+        function configureApi() {
+            const url = prompt('Backend URL (e.g. https://your-app.onrender.com):', API_BASE);
+            if (url === null) return;
+            const key = prompt('API key (leave blank if the backend has none):', API_KEY);
+            API_BASE = (url.trim() || DEFAULT_API).replace(/\/+$/, '');
+            API_KEY = (key || '').trim();
+            storageSet('lockops.api', API_BASE);
+            storageSet('lockops.key', API_KEY);
+            loadOrders();
+        }
+
+        async function api(path, options = {}) {
+            const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(API_KEY ? { 'X-API-Key': API_KEY } : {}) };
+            const res = await fetch(API_BASE + path, { ...options, headers });
+            if (!res.ok) {
+                let msg = `${res.status} ${res.statusText}`;
+                try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
+                throw new Error(msg);
+            }
+            return res;
+        }
+
+        // ---- State & helpers --------------------------------------------------------
+        let orders = [];
+        let selectedId = null;
+
+        const $ = id => document.getElementById(id);
+        const money = n => '$' + (Number(n) || 0).toFixed(2);
+        const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const statusClass = s => s === 'Dispatched' ? 'status-dispatched' : s === 'Closed' ? 'status-closed' : 'status-pending';
+
+        function showBanner(html, type = 'error', autoHideMs = 0) {
+            const b = $('banner');
+            b.className = `banner show ${type}`;
+            b.innerHTML = html;
+            clearTimeout(showBanner._t);
+            if (autoHideMs) showBanner._t = setTimeout(() => { b.className = 'banner'; }, autoHideMs);
+        }
+        function hideBanner() { $('banner').className = 'banner'; }
+
+        // Rough equirectangular projection of the continental US onto the canvas.
+        function project({ lat, lng }) {
+            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+            return {
+                left: clamp(((lng + 125) / 59) * 100, 4, 96),
+                top: clamp(((50 - lat) / 26) * 100, 10, 96),
+            };
+        }
+
+        // ---- Rendering --------------------------------------------------------------
+        function render() {
+            const list = $('ticket-list');
+            list.innerHTML = orders.length ? orders.map(o => `
+                <div class="ticket-item ${o.id === selectedId ? 'active' : ''}" role="button" tabindex="0"
+                     onclick="selectTicket('${esc(o.id)}')" onkeydown="if(event.key==='Enter')selectTicket('${esc(o.id)}')">
+                    <div>
+                        <span class="status-badge ${statusClass(o.dispatcherStatus)}">${esc(o.dispatcherStatus)}</span>
+                        <div class="tech-name">📍 ${esc(o.address)} — ${esc(o.techName)}</div>
+                        <div class="ticket-details">Ticket #${esc(o.id)} | Issue: ${esc(o.notes)}</div>
+                    </div>
+                    <div class="right-align">
+                        <span class="ticket-details">Gross Collected</span>
+                        <div class="price-bold">${money(o.grossCollected)}</div>
+                    </div>
+                </div>`).join('') : '<div class="empty">No jobs in the ledger.</div>';
+
+            const map = $('map-canvas');
+            map.querySelectorAll('.map-pin').forEach(p => p.remove());
+            orders.filter(o => o.location).forEach(o => {
+                const { left, top } = project(o.location);
+                const pin = document.createElement('button');
+                pin.type = 'button';
+                pin.className = 'map-pin' + (o.id === selectedId ? ' active' : '');
+                pin.style.left = left + '%';
+                pin.style.top = top + '%';
+                pin.title = `${o.address} — ${o.dispatcherStatus}`;
+                pin.innerHTML = `<span class="pin-label">${esc(o.techName)} (#${esc(o.id)})</span><span class="pin-icon">📍</span>`;
+                pin.onclick = () => selectTicket(o.id);
+                map.appendChild(pin);
+            });
+        }
+
+        function selectTicket(id) {
+            const o = orders.find(x => x.id === id);
+            if (!o) return;
+            selectedId = id;
+            $('inspector-ticket-id').textContent = `#${o.id} (${o.techName})`;
+            $('inspector-notes').textContent = `${o.address} · ${o.dispatcherStatus}`;
+            $('gross-input').value = o.grossCollected;
+            $('parts-input').value = o.partCost;
+            $('rate-input').value = o.companyRate ?? 30;
+            const closed = o.dispatcherStatus === 'Closed';
+            ['gross-input', 'parts-input', 'rate-input', 'finalize-btn', 'dispatch-btn'].forEach(k => $(k).disabled = closed);
+            $('finalize-btn').textContent = closed ? '🔒 Ticket Closed' : '✅ Finalize & Close Ticket';
+            $('form-error').textContent = '';
+            runCalculations();
+            render();
+        }
+
+        // ---- Calculations (mirrors computeSplit() in backend/server.js) -------------
+        function readInputs() {
+            const gross = parseFloat($('gross-input').value);
+            const parts = parseFloat($('parts-input').value);
+            const rate = parseFloat($('rate-input').value);
+            let error = '';
+            if (!Number.isFinite(gross) || gross < 0) error = 'Gross collected must be a number ≥ 0.';
+            else if (!Number.isFinite(parts) || parts < 0) error = 'Part costs must be a number ≥ 0.';
+            else if (parts > gross) error = 'Part costs cannot exceed the amount collected.';
+            $('gross-input').classList.toggle('invalid', !Number.isFinite(gross) || gross < 0);
+            $('parts-input').classList.toggle('invalid', !Number.isFinite(parts) || parts < 0 || parts > gross);
+            return { gross, parts, rate, error };
+        }
+
+        function runCalculations() {
+            const { gross, parts, rate, error } = readInputs();
+            $('rate-display').textContent = `${rate}%`;
+            const g = Number.isFinite(gross) ? gross : 0;
+            const p = Number.isFinite(parts) ? parts : 0;
+            const net = Math.max(g - p, 0);
+            const company = round2(net * rate / 100);
+            $('calc-net').textContent = money(net);
+            $('calc-company').textContent = money(company);
+            $('calc-tech').textContent = money(g - company);
+            $('form-error').textContent = selectedId ? error : '';
+            const o = orders.find(x => x.id === selectedId);
+            $('finalize-btn').disabled = !o || o.dispatcherStatus === 'Closed' || Boolean(error);
+        }
+
+        // ---- Actions ----------------------------------------------------------------
+        async function loadOrders() {
+            try {
+                const data = await (await api('/api/orders')).json();
+                orders = data.ledger || [];
+                hideBanner();
+                if (!orders.some(o => o.id === selectedId)) selectedId = orders[0]?.id ?? null;
+                render();
+                if (selectedId) selectTicket(selectedId);
+            } catch (err) {
+                orders = [];
+                render();
+                showBanner(`Can't reach the backend at <code>${esc(API_BASE)}</code> (${esc(err.message)}). Start it with <code>cd backend &amp;&amp; npm install &amp;&amp; npm start</code>, or click <b>⚙️ API</b> to point at your deployed URL.`);
+            }
+        }
+
+        async function finalizeSplit() {
+            const { gross, parts, rate, error } = readInputs();
+            if (!selectedId || error) return;
+            const o = orders.find(x => x.id === selectedId);
+            if (!confirm(`Close ticket #${selectedId}?\n\nCompany remittance: ${$('calc-company').textContent}\nTechnician payout: ${$('calc-tech').textContent}`)) return;
+            $('finalize-btn').disabled = true;
+            try {
+                const { record } = await (await api('/api/dispatcher/finalize-split', {
+                    method: 'POST',
+                    body: JSON.stringify({ orderId: selectedId, grossCollected: gross, partCost: parts, customCompanyRate: rate }),
+                })).json();
+                Object.assign(o, record);
+                selectTicket(record.id);
+                showBanner(`Ticket #${esc(record.id)} closed — ${money(record.companyRemittanceDue)} due to the company.`, 'ok', 4000);
+            } catch (err) {
+                $('form-error').textContent = err.message;
+                runCalculations();
+            }
+        }
+
+        async function dispatchDiscord() {
+            if (!selectedId) return;
+            $('dispatch-btn').disabled = true;
+            try {
+                const { record, mocked } = await (await api('/api/dispatch/discord', {
+                    method: 'POST', body: JSON.stringify({ orderId: selectedId }),
+                })).json();
+                Object.assign(orders.find(x => x.id === selectedId), record);
+                selectTicket(selectedId);
+                showBanner(`Dispatch alert for #${esc(record.id)} ${mocked ? 'logged (mock mode — set DISCORD_WEBHOOK_URL on the backend to send for real)' : 'sent to Discord'}.`, 'ok', 5000);
+            } catch (err) {
+                showBanner(`Dispatch failed: ${esc(err.message)}`);
+            } finally {
+                const o = orders.find(x => x.id === selectedId);
+                $('dispatch-btn').disabled = !o || o.dispatcherStatus === 'Closed';
+            }
+        }
+
+        async function downloadCsv() {
+            try {
+                const blob = await (await api('/api/accounting/export-csv')).blob();
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = 'lock-ops-ledger.csv';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            } catch (err) {
+                showBanner(`CSV export failed: ${esc(err.message)}`);
+            }
+        }
+
+        runCalculations();
+        loadOrders();
+    </script>
+</body>
+</html>
