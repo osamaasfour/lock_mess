@@ -47,6 +47,17 @@ test('discord dispatch is mocked without a webhook and refuses closed jobs', asy
     assert.strictEqual((await post('/dispatch/discord', { orderId: '10945' })).status, 409);
 });
 
+test('whatsapp dispatch is mocked without credentials, uses hello_world by default', async () => {
+    const res = await post('/dispatch/whatsapp', { orderId: '10944' });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.mocked, true);
+    assert.strictEqual(data.mode, 'template');
+    assert.strictEqual(data.sentTo, '+15550199');
+    assert.strictEqual((await post('/dispatch/whatsapp', { orderId: '10945' })).status, 409);
+    assert.strictEqual((await post('/dispatch/whatsapp', { orderId: 'nope' })).status, 404);
+});
+
 test('CSV export has a header and one row per order', async () => {
     const res = await fetch(base + '/accounting/export-csv');
     assert.match(res.headers.get('content-type'), /text\/csv/);

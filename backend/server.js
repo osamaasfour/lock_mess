@@ -11,6 +11,18 @@ const API_KEY = process.env.DISPATCH_API_KEY || '';           // if set, require
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';           // e.g. https://lockmess-frontend.vercel.app (comma-separated for several)
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || '';
 
+// WhatsApp Cloud API (Meta). Mock mode unless both TOKEN and PHONE_NUMBER_ID are set.
+const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN || '';
+const WHATSAPP_PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID || '';
+const WHATSAPP_API_VERSION = process.env.WHATSAPP_API_VERSION || 'v23.0';
+// Template to send. 'hello_world' = Meta's built-in test template (no variables).
+// Your own template should take 3 body variables: {{1}} job id, {{2}} address, {{3}} notes.
+// Empty = send plain text (only delivered within 24h of the technician last messaging you).
+const WHATSAPP_TEMPLATE = process.env.WHATSAPP_TEMPLATE ?? 'hello_world';
+const WHATSAPP_TEMPLATE_LANG = process.env.WHATSAPP_TEMPLATE_LANG || 'en_US';
+// While testing, send every WhatsApp alert to this number instead of the technician's.
+const WHATSAPP_TEST_RECIPIENT = process.env.WHATSAPP_TEST_RECIPIENT || '';
+
 app.use(cors({
     origin: CORS_ORIGIN === '*' ? '*' : CORS_ORIGIN.split(',').map(s => s.trim()),
     allowedHeaders: ['Content-Type', 'X-API-Key'],
@@ -92,6 +104,58 @@ app.post('/api/dispatch/discord', async (req, res) => {
     res.json({ success: true, mocked: !DISCORD_WEBHOOK_URL, record: order });
 });
 
+// 2b. Dispatch alert via WhatsApp Cloud API (mocked until WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID are set)
+function buildWhatsAppPayload(order, to) {
+    if (!WHATSAPP_TEMPLATE) {
+        return {
+            messaging_product: 'whatsapp', to, type: 'text',
+            text: { body: `🔐 Dispatch #${order.id} — ${order.address}\nTech: ${order.techName}\nNotes: ${order.notes}` },
+        };
+    }
+    const template = { name: WHATSAPP_TEMPLATE, language: { code: WHATSAPP_TEMPLATE_LANG } };
+    if (WHATSAPP_TEMPLATE !== 'hello_world') {
+        template.components = [{
+            type: 'body',
+            parameters: [order.id, order.address, order.notes].map(text => ({ type: 'text', text: String(text) })),
+        }];
+    }
+    return { messaging_product: 'whatsapp', to, type: 'template', template };
+}
+
+app.post('/api/dispatch/whatsapp', async (req, res) => {
+    const order = findOrder(req.body?.orderId);
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    if (order.dispatcherStatus === 'Closed') {
+        return res.status(409).json({ success: false, error: 'Order is already closed' });
+    }
+
+    const to = String(WHATSAPP_TEST_RECIPIENT || order.techPhone || '').replace(/\D/g, '');
+    if (to.length < 8) return res.status(400).json({ success: false, error: 'No valid WhatsApp number for this technician' });
+
+    const payload = buildWhatsAppPayload(order, to);
+    const mocked = !(WHATSAPP_TOKEN && WHATSAPP_PHONE_NUMBER_ID);
+
+    if (mocked) {
+        console.log(`[WHATSAPP:mock] to +${to}: ${JSON.stringify(payload.template || payload.text)}`);
+    } else {
+        try {
+            await axios.post(
+                `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${WHATSAPP_PHONE_NUMBER_ID}/messages`,
+                payload,
+                { headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }, timeout: 10000 },
+            );
+        } catch (err) {
+            const metaError = err.response?.data?.error;
+            const detail = metaError ? `${metaError.message}${metaError.code ? ` (code ${metaError.code})` : ''}` : err.message;
+            console.error('[WHATSAPP] send failed:', detail);
+            return res.status(502).json({ success: false, error: `WhatsApp send failed: ${detail}` });
+        }
+    }
+
+    order.dispatcherStatus = 'Dispatched';
+    res.json({ success: true, mocked, sentTo: `+${to}`, mode: payload.type, record: order });
+});
+
 // 3. Finalize the financial split for a job
 app.post('/api/dispatcher/finalize-split', (req, res) => {
     const { orderId, grossCollected, partCost, customCompanyRate } = req.body || {};
@@ -141,4 +205,4 @@ if (require.main === module) {
     app.listen(PORT, () => console.log(`🚀 Dispatch API active on port ${PORT}${API_KEY ? ' (API key required)' : ''}`));
 }
 
-module.exports = { app, computeSplit, toNumber };
+module.exports = { app, computeSplit, toNumber, buildWhatsAppPayload };
