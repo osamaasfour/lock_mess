@@ -26,7 +26,8 @@ Live Backend REST Engine Endpoint: [lock-ops-backend.onrender.com](https://lock-
 *   **Live US Field Tracking Map Canvas:** Visualizes task clusters and contractor dispatch pins seamlessly across key metropolitan areas (Austin, Miami, Los Angeles).
 *   **Active Operations Influx Stream:** Aggregates regional job cards (`Review Pending` vs. `Dispatched`) directly into a data logging matrix.
 *   **Custom Financial Rule Inspector:** Dynamically tracks the downstream independent contractor model. Calculates on-site retail collections minus out-of-pocket lock hardware assembly costs, splitting company remittance allocations live via adjustable ranges.
-*   **Discord Dispatch Alerts:** Sends a job alert to a Discord channel through a webhook (logged in mock mode when no webhook is configured). WhatsApp dispatch is planned, not yet implemented.
+*   **Discord Dispatch Alerts:** Sends a job alert to a Discord channel through a webhook (logged in mock mode when no webhook is configured).
+*   **WhatsApp Dispatch:** Messages the technician through Meta's WhatsApp Cloud API (mock mode until credentials are set).
 *   **One-Click Accounting Ledger Exports:** Instantly compiles and exports the state registry database into downloadable `.CSV` spreadsheets for external evaluation or payroll analysis.
 
 ---
@@ -63,7 +64,7 @@ node server.js
 ### 2. Launch the Web Interface Frontend
 Simply locate and double-click `frontend/index.html` on your filesystem or run a local browser asset server to spin up the dispatcher command control workspace.
 
-The dashboard talks to `http://localhost:5000` by default. To point it at a deployed backend, open it with `?api=https://your-backend.onrender.com` or click **⚙️ API** in the header (the setting is remembered in your browser).
+When opened locally the dashboard talks to `http://localhost:5000`; the deployed site defaults to `https://lock-ops-backend.onrender.com`. To use a different backend, open it with `?api=https://your-backend.onrender.com` or click **⚙️ API** in the header (the setting is remembered in your browser).
 
 ### 3. Run the tests
 ```bash
@@ -83,6 +84,12 @@ All variables are optional.
 | `DISPATCH_API_KEY` | When set, every `/api/*` call except `/api/health` must send it in an `X-API-Key` header. Enter the same key under **⚙️ API** in the dashboard. Strongly recommended for any public deployment. |
 | `CORS_ORIGIN` | Allowed frontend origin(s), comma-separated, e.g. `https://lockmess-frontend.vercel.app`. Defaults to `*`. |
 | `DISCORD_WEBHOOK_URL` | Discord channel webhook for dispatch alerts. Without it, alerts are only logged. |
+| `WHATSAPP_TOKEN` | WhatsApp Cloud API access token (Meta app → WhatsApp → API Setup). With `WHATSAPP_PHONE_NUMBER_ID`, enables real sends. |
+| `WHATSAPP_PHONE_NUMBER_ID` | The sender's *Phone number ID* from the same API Setup page (not the phone number itself). |
+| `WHATSAPP_TEST_RECIPIENT` | While testing, send every WhatsApp alert to this number (e.g. your own, `+20…`) instead of the technician's. Must be added as a recipient in API Setup. |
+| `WHATSAPP_TEMPLATE` | Template to send. Default `hello_world` (Meta's test template). Use your own approved template with 3 body variables: `{{1}}` job id, `{{2}}` address, `{{3}}` notes. Set to empty to send plain text (only delivered within 24 h of the technician messaging your number). |
+| `WHATSAPP_TEMPLATE_LANG` | Template language code, default `en_US`. |
+| `WHATSAPP_API_VERSION` | Graph API version, default `v23.0`. |
 
 > ⚠️ Orders are stored in memory and reset whenever the server restarts (which Render's free tier does often). Move them to a database before using this with real jobs.
 
@@ -93,6 +100,7 @@ All variables are optional.
 | `GET` | `/api/health` | — |
 | `GET` | `/api/orders` | — |
 | `POST` | `/api/dispatch/discord` | `{ orderId }` |
+| `POST` | `/api/dispatch/whatsapp` | `{ orderId }` |
 | `POST` | `/api/dispatcher/finalize-split` | `{ orderId, grossCollected?, partCost, customCompanyRate }` (rate 0–100). Closes the ticket; a closed ticket returns `409`. |
 | `GET` | `/api/accounting/export-csv` | — |
 

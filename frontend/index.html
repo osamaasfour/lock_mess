@@ -132,15 +132,19 @@
 
                 <div id="form-error" class="form-error"></div>
                 <button type="button" id="finalize-btn" class="submit-btn" onclick="finalizeSplit()">✅ Finalize &amp; Close Ticket</button>
-                <button type="button" id="dispatch-btn" class="ghost-btn dispatch-btn" onclick="dispatchDiscord()">📣 Send Discord Dispatch Alert</button>
+                <button type="button" id="dispatch-btn" class="ghost-btn dispatch-btn" onclick="sendDispatch('discord')">📣 Send Discord Dispatch Alert</button>
+                <button type="button" id="whatsapp-btn" class="ghost-btn dispatch-btn" onclick="sendDispatch('whatsapp')">💬 Send WhatsApp to Technician</button>
             </div>
         </div>
     </div>
 
     <script>
         // ---- API config -------------------------------------------------------------
-        // Priority: ?api=… in the URL  →  saved setting  →  localhost:5000 (local dev)
-        const DEFAULT_API = 'http://localhost:5000';
+        // Priority: ?api=… in the URL  →  saved setting  →  default below.
+        // Default: localhost:5000 when opened locally, the Render backend everywhere else.
+        const PRODUCTION_API = 'https://lock-ops-backend.onrender.com';
+        const IS_LOCAL = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
+        const DEFAULT_API = IS_LOCAL ? 'http://localhost:5000' : PRODUCTION_API;
         function storageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
         function storageSet(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} }
 
@@ -242,7 +246,7 @@
             $('parts-input').value = o.partCost;
             $('rate-input').value = o.companyRate ?? 30;
             const closed = o.dispatcherStatus === 'Closed';
-            ['gross-input', 'parts-input', 'rate-input', 'finalize-btn', 'dispatch-btn'].forEach(k => $(k).disabled = closed);
+            ['gross-input', 'parts-input', 'rate-input', 'finalize-btn', 'dispatch-btn', 'whatsapp-btn'].forEach(k => $(k).disabled = closed);
             $('finalize-btn').textContent = closed ? '🔒 Ticket Closed' : '✅ Finalize & Close Ticket';
             $('form-error').textContent = '';
             runCalculations();
@@ -314,21 +318,27 @@
             }
         }
 
-        async function dispatchDiscord() {
+        async function sendDispatch(channel) {
             if (!selectedId) return;
-            $('dispatch-btn').disabled = true;
+            const btn = $(channel === 'whatsapp' ? 'whatsapp-btn' : 'dispatch-btn');
+            const label = channel === 'whatsapp' ? 'WhatsApp' : 'Discord';
+            btn.disabled = true;
             try {
-                const { record, mocked } = await (await api('/api/dispatch/discord', {
+                const data = await (await api(`/api/dispatch/${channel}`, {
                     method: 'POST', body: JSON.stringify({ orderId: selectedId }),
                 })).json();
-                Object.assign(orders.find(x => x.id === selectedId), record);
+                Object.assign(orders.find(x => x.id === selectedId), data.record);
                 selectTicket(selectedId);
-                showBanner(`Dispatch alert for #${esc(record.id)} ${mocked ? 'logged (mock mode — set DISCORD_WEBHOOK_URL on the backend to send for real)' : 'sent to Discord'}.`, 'ok', 5000);
+                const where = channel === 'whatsapp' ? ` to ${esc(data.sentTo)}` : '';
+                const envHint = channel === 'whatsapp' ? 'WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID' : 'DISCORD_WEBHOOK_URL';
+                showBanner(data.mocked
+                    ? `${label} alert for #${esc(data.record.id)} logged${where} (mock mode — set ${envHint} on the backend to send for real).`
+                    : `${label} alert for #${esc(data.record.id)} sent${where}.`, 'ok', 8000);
             } catch (err) {
-                showBanner(`Dispatch failed: ${esc(err.message)}`);
+                showBanner(`${label} dispatch failed: ${esc(err.message)}`);
             } finally {
                 const o = orders.find(x => x.id === selectedId);
-                $('dispatch-btn').disabled = !o || o.dispatcherStatus === 'Closed';
+                btn.disabled = !o || o.dispatcherStatus === 'Closed';
             }
         }
 
