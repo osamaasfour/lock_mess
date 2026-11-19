@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock-Ops · Log in</title>
+    <link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+    <main class="auth-wrap">
+        <div class="card auth-card">
+            <h1 id="title">🔐 LOCK-OPS</h1>
+            <p class="muted" id="subtitle">Log in to continue.</p>
+            <div id="banner" class="hidden"></div>
+
+            <form id="login-form">
+                <div class="field"><label class="label" for="email">Email</label><input id="email" type="email" required autocomplete="username"></div>
+                <div class="field"><label class="label" for="password">Password</label><input id="password" type="password" required autocomplete="current-password"></div>
+                <button class="btn btn-primary btn-block" id="login-btn">Log in</button>
+            </form>
+
+            <form id="setup-form" class="hidden">
+                <p class="small muted">No accounts exist yet. Create the first <b>admin</b> login.</p>
+                <div class="field"><label class="label" for="s-name">Your name</label><input id="s-name" required></div>
+                <div class="field"><label class="label" for="s-email">Email</label><input id="s-email" type="email" required autocomplete="username"></div>
+                <div class="field"><label class="label" for="s-password">Password (8+ characters)</label><input id="s-password" type="password" minlength="8" required autocomplete="new-password"></div>
+                <div class="field hidden" id="s-code-field"><label class="label" for="s-code">Setup code</label><input id="s-code" autocomplete="off"><div class="field-hint">The SETUP_CODE value set on the server.</div></div>
+                <button class="btn btn-primary btn-block">Create admin account</button>
+            </form>
+
+            <p class="small muted" style="margin-top:16px">Server: <span id="api-base" class="mono"></span> · <a href="#" id="change-api">change</a></p>
+        </div>
+    </main>
+    <script src="assets/app.js"></script>
+    <script>
+        const { api, setSession, homeFor, banner, $, esc } = LockOps;
+        const params = new URLSearchParams(location.search);
+        const next = params.get('next');
+        $('#api-base').textContent = LockOps.apiBase;
+        $('#change-api').onclick = e => { e.preventDefault(); LockOps.setApiBase(); };
+
+        function go(user) {
+            const target = next && !/^(https?:)?\/\//.test(next) && !next.startsWith('login') ? next : homeFor(user);
+            location.href = target;
+        }
+
+        async function init() {
+            try {
+                const s = await api('/api/auth/status', { noRedirect: true });
+                if (s.companyName) { $('#title').textContent = `🔐 ${s.companyName}`; document.title = `${s.companyName} · Log in`; }
+                if (s.needsSetup) {
+                    $('#login-form').classList.add('hidden');
+                    if (s.setupAllowed) {
+                        $('#setup-form').classList.remove('hidden');
+                        $('#subtitle').textContent = 'Welcome! Let’s set up your account.';
+                        if (s.setupNeedsCode) $('#s-code-field').classList.remove('hidden');
+                    } else {
+                        banner($('#banner'), 'No admin account exists yet. On the server (Render → Environment), set <code>ADMIN_EMAIL</code> and <code>ADMIN_PASSWORD</code>, redeploy, then log in here with them.', 'warn');
+                    }
+                }
+            } catch (err) { banner($('#banner'), esc(err.message)); }
+        }
+
+        $('#login-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            $('#login-btn').disabled = true;
+            try {
+                const r = await api('/api/auth/login', { method: 'POST', body: { email: $('#email').value, password: $('#password').value }, noRedirect: true });
+                setSession(r.token, r.user);
+                go(r.user);
+            } catch (err) { banner($('#banner'), esc(err.message)); }
+            finally { $('#login-btn').disabled = false; }
+        });
+
+        $('#setup-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            try {
+                const r = await api('/api/auth/setup', { method: 'POST', noRedirect: true, body: { name: $('#s-name').value, email: $('#s-email').value, password: $('#s-password').value, setupCode: $('#s-code').value } });
+                setSession(r.token, r.user);
+                location.href = 'settings.html';
+            } catch (err) { banner($('#banner'), esc(err.message)); }
+        });
+
+        init();
+    </script>
+</body>
+</html>

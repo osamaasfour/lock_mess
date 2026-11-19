@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock-Ops · Technicians</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <style>
+        .head { margin-bottom: 16px; }
+        .head h1 { font-size: 22px; font-weight: 900; }
+        td .name { font-weight: 700; color: #fff; }
+        .inactive td { opacity: .55; }
+        .login-box { border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin-top: 6px; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div id="banner" class="hidden"></div>
+        <div class="row head">
+            <h1>Technicians</h1><span class="spacer"></span>
+            <span class="small muted" id="tech-page-link"></span>
+            <button class="btn btn-primary" id="add-btn" type="button">＋ Add technician</button>
+        </div>
+        <div class="card">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr><th>Technician</th><th>Status</th><th>Contact by</th><th>Location</th><th>Open jobs</th><th>Skills</th><th></th></tr></thead>
+                    <tbody id="rows"><tr><td colspan="7" class="muted">Loading…</td></tr></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <dialog id="dlg">
+        <form id="form">
+            <div class="dialog-head"><h2 id="dlg-title">Add technician</h2></div>
+            <div class="grid-2">
+                <div class="field"><label class="label" for="name">Name</label><input id="name" required></div>
+                <div class="field"><label class="label" for="phone">Mobile phone</label><input id="phone" type="tel" placeholder="+1 555 123 4567"></div>
+            </div>
+            <div class="grid-2">
+                <div class="field"><label class="label" for="channel">Send jobs by</label>
+                    <select id="channel"><option value="imessage">iMessage / SMS</option><option value="whatsapp">WhatsApp</option><option value="discord">Discord</option></select></div>
+                <div class="field"><label class="label" for="status">Status</label>
+                    <select id="status"><option value="available">Available</option><option value="busy">Busy</option><option value="off">Off duty</option></select></div>
+            </div>
+            <div class="field hidden" id="discord-field"><label class="label" for="discordUserId">Discord user ID</label><input id="discordUserId" inputmode="numeric" placeholder="e.g. 712345678901234567">
+                <div class="field-hint">In Discord: Settings → Advanced → turn on Developer Mode, then right-click the person → Copy User ID. Used to @mention them.</div></div>
+            <div class="field"><label class="label" for="email">Email</label><input id="email" type="email"></div>
+            <div class="field"><label class="label" for="baseAddress">Base / home address</label><input id="baseAddress" placeholder="Used for distance when live GPS isn't available">
+                <div class="field-hint" id="base-hint"></div></div>
+            <div class="field"><label class="label" for="skills">Skills (comma-separated)</label><input id="skills" placeholder="Automotive, Smart locks, Safes"></div>
+            <div class="field"><label class="label" for="notes">Notes</label><textarea id="notes" style="min-height:60px"></textarea></div>
+            <label class="check field"><input type="checkbox" id="active" checked> Active (shown to dispatchers)</label>
+
+            <div class="login-box">
+                <h3>GPS page login</h3>
+                <p class="small muted" style="margin:4px 0 10px">The technician uses this to open the technician page on their phone, share live location and update jobs.</p>
+                <div class="grid-2">
+                    <div class="field"><label class="label" for="loginEmail">Login email</label><input id="loginEmail" type="email" autocomplete="off"></div>
+                    <div class="field"><label class="label" for="password" id="pw-label">Password</label><input id="password" type="text" minlength="8" autocomplete="off" placeholder="8+ characters"></div>
+                </div>
+                <label class="check small hidden" id="remove-login-wrap"><input type="checkbox" id="removeLogin"> Remove this login</label>
+            </div>
+
+            <div class="dialog-actions">
+                <button type="button" class="btn btn-danger hidden" id="delete-btn" style="margin-right:auto">Delete</button>
+                <button type="button" class="btn" id="cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="save-btn">Save</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="assets/app.js"></script>
+    <script>
+    (async function () {
+        const { api, toast, banner, $, esc, ago } = LockOps;
+        const user = await LockOps.requireAuth(['admin', 'dispatcher']);
+        LockOps.renderNav('technicians');
+        const isAdmin = user.role === 'admin';
+        if (!isAdmin) $('#add-btn').classList.add('hidden');
+        const techUrl = new URL('tech.html', location.href).href;
+        $('#tech-page-link').innerHTML = `Technician page: <a href="${esc(techUrl)}" target="_blank" rel="noopener">${esc(techUrl.replace(/^https?:\/\//, ''))}</a>`;
+
+        let techs = [], editing = null;
+        const chLabel = { imessage: 'iMessage / SMS', whatsapp: 'WhatsApp', discord: 'Discord' };
+
+        function render() {
+            $('#rows').innerHTML = techs.length ? techs.map(t => `
+                <tr class="${t.active ? '' : 'inactive'}">
+                    <td><div class="name">${esc(t.name)}</div><div class="small muted">${esc(t.phone || '')}${t.email ? ` · ${esc(t.email)}` : ''}</div>
+                        ${isAdmin ? `<div class="small muted">${t.hasLogin ? `🔑 ${esc(t.loginEmail)}` : 'No GPS login'}</div>` : ''}</td>
+                    <td><span class="badge tech-${t.status}">${t.active ? esc(t.status) : 'inactive'}</span></td>
+                    <td>${chLabel[t.channel] || ''}</td>
+                    <td class="small">${t.positionSource === 'live' ? `📡 Live · ${ago(t.positionAt)}` : t.lastSeenAt ? `Last GPS ${ago(t.lastSeenAt)}` : '<span class="muted">No live GPS</span>'}
+                        <div class="muted">${t.baseAddress ? `🏠 ${esc(t.baseAddress)}${t.baseLocation ? '' : ' ⚠️ not found on map'}` : ''}</div></td>
+                    <td>${t.openJobs}</td>
+                    <td class="small">${esc(t.skills.join(', '))}</td>
+                    <td>${isAdmin ? `<button class="btn btn-sm" data-edit="${esc(t.id)}" type="button">Edit</button>` : ''}</td>
+                </tr>`).join('') : `<tr><td colspan="7" class="muted">No technicians yet.${isAdmin ? ' Click “Add technician”.' : ''}</td></tr>`;
+        }
+
+        async function load() {
+            try { techs = (await api('/api/technicians')).technicians; render(); }
+            catch (e) { if (e.status !== 401) banner($('#banner'), esc(e.message)); }
+        }
+
+        const dlg = $('#dlg');
+        const syncChannel = () => $('#discord-field').classList.toggle('hidden', $('#channel').value !== 'discord');
+        $('#channel').onchange = syncChannel;
+
+        function open(t) {
+            editing = t || null;
+            $('#dlg-title').textContent = t ? `Edit ${t.name}` : 'Add technician';
+            for (const k of ['name', 'phone', 'discordUserId', 'email', 'baseAddress', 'notes']) $(`#${k}`).value = t?.[k] || '';
+            $('#channel').value = t?.channel || 'imessage';
+            $('#status').value = t?.status || 'available';
+            $('#skills').value = (t?.skills || []).join(', ');
+            $('#active').checked = t ? t.active : true;
+            $('#loginEmail').value = t?.loginEmail || '';
+            $('#password').value = '';
+            $('#password').required = false;
+            $('#pw-label').textContent = t?.hasLogin ? 'New password (leave blank to keep)' : 'Password';
+            $('#removeLogin').checked = false;
+            $('#remove-login-wrap').classList.toggle('hidden', !t?.hasLogin);
+            $('#delete-btn').classList.toggle('hidden', !t);
+            $('#base-hint').textContent = t?.baseAddress && !t.baseLocation ? '⚠️ This address wasn’t found on the map. Try adding city and state.' : '';
+            syncChannel();
+            dlg.showModal();
+        }
+
+        $('#add-btn').onclick = () => open(null);
+        $('#cancel-btn').onclick = () => dlg.close();
+        $('#rows').addEventListener('click', e => { const id = e.target.closest('[data-edit]')?.dataset.edit; if (id) open(techs.find(t => t.id === id)); });
+
+        $('#form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const body = {
+                name: $('#name').value, phone: $('#phone').value, channel: $('#channel').value, status: $('#status').value,
+                discordUserId: $('#discordUserId').value, email: $('#email').value, baseAddress: $('#baseAddress').value,
+                skills: $('#skills').value, notes: $('#notes').value, active: $('#active').checked,
+                loginEmail: $('#loginEmail').value || $('#email').value,
+            };
+            if ($('#password').value) body.password = $('#password').value;
+            if ($('#removeLogin').checked) body.removeLogin = true;
+            $('#save-btn').disabled = true;
+            try {
+                const r = editing ? await api(`/api/technicians/${editing.id}`, { method: 'PUT', body }) : await api('/api/technicians', { method: 'POST', body });
+                dlg.close();
+                const t = r.technician;
+                toast(t.baseAddress && !t.baseLocation ? `${t.name} saved, but the base address wasn’t found on the map.` : `${t.name} saved.`, t.baseAddress && !t.baseLocation ? 'error' : 'ok');
+                await load();
+            } catch (err) { toast(err.message, 'error'); }
+            finally { $('#save-btn').disabled = false; }
+        });
+
+        $('#delete-btn').onclick = async () => {
+            if (!editing || !confirm(`Delete ${editing.name}? Their GPS login is removed too.`)) return;
+            try { await api(`/api/technicians/${editing.id}`, { method: 'DELETE' }); dlg.close(); toast('Technician deleted.'); await load(); }
+            catch (err) { toast(err.message, 'error'); }
+        };
+
+        await load();
+        setInterval(() => { if (!document.hidden && !dlg.open) load(); }, 30000);
+    })();
+    </script>
+</body>
+</html>

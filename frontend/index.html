@@ -3,362 +3,427 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lock-Ops Dispatch Console</title>
+    <title>Lock-Ops · Dispatch</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <link rel="stylesheet" href="assets/app.css">
     <style>
-        body { background-color: #0f172a; color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; }
-        .container { max-width: 1200px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 2px solid #334155; padding-bottom: 16px; margin-bottom: 24px; }
-        h1 { margin: 0; font-size: 28px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff; }
-        p.subtitle { margin: 4px 0 0 0; font-size: 13px; color: #94a3b8; }
-        .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .csv-btn { background-color: #4f46e5; color: white; border: none; text-decoration: none; font-weight: bold; padding: 10px 18px; font-size: 14px; border-radius: 6px; transition: 0.2s; cursor: pointer; }
-        .csv-btn:hover { background-color: #4338ca; }
-        .ghost-btn { background: transparent; color: #cbd5e1; border: 1px solid #475569; padding: 9px 14px; font-size: 13px; border-radius: 6px; cursor: pointer; }
-        .ghost-btn:hover { border-color: #94a3b8; color: #fff; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .toolbar { margin-bottom: 16px; }
+        .toolbar h1 { font-size: 22px; font-weight: 900; margin-right: 8px; }
+        .toolbar input { width: 220px; }
+        .toolbar select { width: auto; }
+        .board { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(340px, 1fr); gap: 20px; align-items: start; }
+        @media (max-width: 980px) { .board { grid-template-columns: 1fr; } }
+        .left > * + * { margin-top: 20px; }
+        #map { height: 430px; border-radius: 8px; background: #111827; }
+        .map-card { padding: 12px; }
+        .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; font-size: 12px; color: var(--muted); }
+        .legend span { display: inline-flex; gap: 6px; align-items: center; }
+        .leaflet-container { font: inherit; }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel); color: var(--text); }
+        .leaflet-popup-content { margin: 10px 12px; }
+        .pin { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: #e11d48; border: 2px solid #fff; display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+        .pin span { transform: rotate(45deg); font-size: 11px; font-weight: 800; color: #fff; }
+        .pin.selected { background: #6366f1; width: 38px; height: 38px; }
+        .pin.assigned { background: #2563eb; }
+        .tpin { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 11px; color: #052e16; border: 2px solid #fff; box-shadow: 0 2px 6px rgba(0,0,0,.5); }
+        .tpin.available { background: #34d399; } .tpin.busy { background: #fbbf24; } .tpin.off { background: #a1a1aa; }
+        .tpin.base { border-style: dashed; opacity: .85; }
 
-        .banner { display: none; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
-        .banner.show { display: block; }
-        .banner.error { background: #450a0a; border: 1px solid #991b1b; color: #fecaca; }
-        .banner.ok { background: #052e16; border: 1px solid #166534; color: #bbf7d0; }
-        .banner code { background: rgba(0,0,0,0.3); padding: 1px 5px; border-radius: 4px; }
+        .ticket-item { display: block; width: 100%; text-align: left; font: inherit; color: inherit; padding: 12px; background: rgba(51,65,85,.25); border: 1px solid var(--line); border-radius: 9px; margin-bottom: 10px; cursor: pointer; }
+        .ticket-item:hover { background: rgba(51,65,85,.5); border-color: var(--line-2); }
+        .ticket-item.active { border-color: var(--accent); background: rgba(99,102,241,.12); }
+        .ticket-item .who { font-weight: 700; color: #fff; }
+        .ticket-item .addr { color: var(--soft); font-size: 13px; }
+        .empty { color: var(--muted); padding: 10px 0; }
 
-        .map-section { background-color: #1e293b; border: 1px solid #475569; border-radius: 12px; padding: 16px; margin-bottom: 24px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
-        .map-title-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: bold; font-size: 16px; color: #ffffff; }
-        .map-pulse { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; display: inline-block; box-shadow: 0 0 8px #ef4444; }
-        .map-canvas { width: 100%; height: 350px; background-color: #111827; border-radius: 8px; position: relative; overflow: hidden; border: 1px solid #334155; }
-        .map-bg-grid { position: absolute; width: 100%; height: 100%; opacity: 0.15; background-image: radial-gradient(#94a3b8 1px, transparent 1px); background-size: 16px 16px; }
-        .map-pin { position: absolute; cursor: pointer; transform: translate(-50%, -100%); transition: 0.2s; background: none; border: none; padding: 0; }
-        .map-pin:hover, .map-pin.active { transform: translate(-50%, -100%) scale(1.2); }
-        .pin-icon { font-size: 24px; }
-        .pin-label { position: absolute; background: #0f172a; border: 1px solid #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; white-space: nowrap; top: -20px; left: 50%; transform: translateX(-50%); box-shadow: 0 2px 4px rgba(0,0,0,0.5); color: #ffffff; }
-        .map-pin.active .pin-label { border-color: #6366f1; }
-
-        .dashboard-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; }
-        @media (max-width: 860px) { .dashboard-grid { grid-template-columns: 1fr; } body { padding: 16px; } }
-        .card { background-color: #1e293b; border: 1px solid #475569; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }
-        h2 { margin: 0 0 16px 0; font-size: 18px; font-weight: 700; color: #ffffff; border-bottom: 1px solid #334155; padding-bottom: 8px; }
-
-        .ticket-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px; background: rgba(51, 65, 85, 0.3); border: 1px solid #334155; border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; }
-        .ticket-item:hover { background: rgba(51, 65, 85, 0.5); border-color: #475569; }
-        .ticket-item.active { border-color: #6366f1; background: rgba(99, 102, 241, 0.12); }
-        .status-badge { font-family: monospace; font-size: 11px; font-weight: bold; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 4px; }
-        .status-pending { background-color: #7c2d12; color: #fdba74; border: 1px solid #9a3412; }
-        .status-dispatched { background-color: #1e3a8a; color: #93c5fd; border: 1px solid #1e40af; }
-        .status-closed { background-color: #14532d; color: #86efac; border: 1px solid #166534; }
-        .tech-name { font-size: 16px; font-weight: bold; color: #ffffff; margin: 2px 0; }
-        .ticket-details { font-size: 13px; color: #cbd5e1; }
-        .right-align { text-align: right; white-space: nowrap; }
-        .price-bold { font-family: monospace; font-size: 16px; font-weight: bold; color: #34d399; }
-        .empty { color: #94a3b8; font-size: 14px; padding: 12px 0; }
-
-        .form-group { margin-bottom: 16px; }
-        label { display: block; font-size: 11px; font-weight: bold; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; letter-spacing: 0.5px; }
-        .num-input { width: 100%; background: #0f172a; border: 1px solid #475569; padding: 10px; color: white; font-family: monospace; font-size: 15px; border-radius: 6px; box-sizing: border-box; }
-        .num-input:disabled { opacity: 0.6; }
-        .num-input.invalid { border-color: #ef4444; }
-        .slider-input { width: 100%; margin: 8px 0; accent-color: #6366f1; cursor: pointer; }
-        .calc-row { display: flex; justify-content: space-between; font-size: 14px; color: #cbd5e1; padding: 8px 0; }
-        .calc-row span:last-child { font-family: monospace; }
-        .calc-total { font-weight: bold; font-size: 16px; color: #34d399; border-top: 1px solid #334155; padding-top: 12px; margin-top: 8px; }
-        .form-error { color: #fca5a5; font-size: 13px; min-height: 18px; margin-top: 8px; }
-        .submit-btn { width: 100%; background-color: #059669; color: white; border: none; font-weight: bold; padding: 12px; border-radius: 6px; font-size: 14px; cursor: pointer; margin-top: 8px; transition: 0.2s; }
-        .submit-btn:hover:not(:disabled) { background-color: #047857; }
-        .dispatch-btn { width: 100%; margin-top: 8px; }
+        aside.panel { position: sticky; top: 76px; max-height: calc(100vh - 96px); overflow: auto; }
+        @media (max-width: 980px) { aside.panel { position: static; max-height: none; } }
+        .kv { display: grid; grid-template-columns: 90px 1fr; gap: 6px 10px; }
+        .kv dt { color: var(--muted); font-size: 12px; padding-top: 1px; }
+        .kv dd { margin: 0; overflow-wrap: anywhere; }
+        .cand { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; }
+        .cand:hover, .cand.hl { border-color: var(--line-2); background: rgba(51,65,85,.3); }
+        .cand .info { flex: 1; min-width: 0; }
+        .cand .name { font-weight: 700; color: #fff; }
+        .dist { font-family: ui-monospace, monospace; font-weight: 700; color: #a5b4fc; white-space: nowrap; }
+        .calc-row { display: flex; justify-content: space-between; padding: 6px 0; color: var(--soft); }
+        .calc-row span:last-child { font-family: ui-monospace, monospace; }
+        .calc-total { font-weight: 700; color: #34d399; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 10px; }
+        .chip { font-size: 11px; color: var(--muted); border: 1px solid var(--line); padding: 1px 6px; border-radius: 999px; }
     </style>
 </head>
 <body>
+    <div class="page">
+        <div id="banner" class="hidden"></div>
+        <div class="row toolbar">
+            <h1>Dispatch</h1>
+            <select id="scope" aria-label="Which tickets"><option value="open">Open tickets</option><option value="all">All tickets</option></select>
+            <input id="search" type="search" placeholder="Search name, phone, address, #">
+            <span class="spacer"></span>
+            <button class="btn" id="refresh-btn" type="button">↻ Refresh</button>
+            <button class="btn" id="csv-btn" type="button">📥 CSV</button>
+            <button class="btn btn-primary" id="new-btn" type="button">＋ New ticket</button>
+        </div>
 
-    <div class="container">
-        <header>
-            <div>
-                <h1>LOCK-OPS CONTROLLER</h1>
-                <p class="subtitle">US National Field Dispatch &amp; Live Splitting Core Dashboard</p>
-            </div>
-            <div class="header-actions">
-                <button type="button" class="ghost-btn" onclick="configureApi()" title="Change backend URL / API key">⚙️ API</button>
-                <button type="button" class="ghost-btn" onclick="loadOrders()">↻ Refresh</button>
-                <button type="button" class="csv-btn" id="csv-btn" onclick="downloadCsv()">📥 Download Sheet (.CSV)</button>
-            </div>
-        </header>
-
-        <div id="banner" class="banner" role="status"></div>
-
-        <section class="map-section">
-            <div class="map-title-bar">
-                <span class="map-pulse"></span>
-                <span>Live US Field Operations Map View</span>
-            </div>
-            <div class="map-canvas" id="map-canvas">
-                <div class="map-bg-grid"></div>
-            </div>
-        </section>
-
-        <div class="dashboard-grid">
-            <div class="card">
-                <h2>📥 Live Operations Influx Stream (Active US Database)</h2>
-                <div id="ticket-list"><div class="empty">Loading jobs…</div></div>
-            </div>
-
-            <div class="card">
-                <h2>⚙️ Custom Rule Inspector</h2>
-                <div class="form-group">
-                    <label>Selected Ticket Reference</label>
-                    <div id="inspector-ticket-id" style="font-family: monospace; font-size: 16px; font-weight: bold; color: #ffffff; padding: 4px 0;">—</div>
-                    <div id="inspector-notes" class="ticket-details"></div>
-                </div>
-
-                <div class="form-group">
-                    <label for="gross-input">Gross Collected Payment ($)</label>
-                    <input type="number" id="gross-input" min="0" step="0.01" class="num-input" oninput="runCalculations()" />
-                </div>
-
-                <div class="form-group">
-                    <label for="parts-input">Technician Part Costs Reimbursement ($)</label>
-                    <input type="number" id="parts-input" min="0" step="0.01" class="num-input" oninput="runCalculations()" />
-                </div>
-
-                <div class="form-group">
-                    <div style="display: flex; justify-content: space-between;">
-                        <label for="rate-input">Company Allocation Share</label>
-                        <span id="rate-display" style="font-family: monospace; color: #6366f1; font-weight: bold;">30%</span>
+        <div class="board">
+            <div class="left">
+                <div class="card map-card">
+                    <div id="map" aria-label="Map of tickets and technicians"></div>
+                    <div class="legend">
+                        <span><span class="dot" style="background:#e11d48"></span>New ticket</span>
+                        <span><span class="dot" style="background:#2563eb"></span>Assigned ticket</span>
+                        <span><span class="dot dot-available"></span>Available tech</span>
+                        <span><span class="dot dot-busy"></span>Busy</span>
+                        <span><span class="dot dot-off"></span>Off</span>
+                        <span>Dashed border = base address (no live GPS)</span>
                     </div>
-                    <input type="range" id="rate-input" min="0" max="100" step="1" value="30" class="slider-input" oninput="runCalculations()" />
                 </div>
-
-                <div class="calc-row"><span>Net after parts</span><span id="calc-net">$0.00</span></div>
-                <div class="calc-row"><span>Company remittance due</span><span id="calc-company">$0.00</span></div>
-                <div class="calc-row calc-total"><span>Technician payout</span><span id="calc-tech">$0.00</span></div>
-
-                <div id="form-error" class="form-error"></div>
-                <button type="button" id="finalize-btn" class="submit-btn" onclick="finalizeSplit()">✅ Finalize &amp; Close Ticket</button>
-                <button type="button" id="dispatch-btn" class="ghost-btn dispatch-btn" onclick="sendDispatch('discord')">📣 Send Discord Dispatch Alert</button>
-                <button type="button" id="whatsapp-btn" class="ghost-btn dispatch-btn" onclick="sendDispatch('whatsapp')">💬 Send WhatsApp to Technician</button>
+                <div class="card">
+                    <div class="card-head"><h2>Tickets</h2><span class="spacer"></span><span class="small muted" id="count"></span></div>
+                    <div id="ticket-list"><div class="empty">Loading…</div></div>
+                </div>
             </div>
+            <aside class="card panel" id="panel"><div class="empty">Select a ticket to see details and the nearest technicians.</div></aside>
         </div>
     </div>
 
+    <dialog id="ticket-dialog">
+        <form id="ticket-form">
+            <div class="dialog-head"><h2 id="ticket-dialog-title">New ticket</h2></div>
+            <div class="grid-2">
+                <div class="field"><label class="label" for="f-name">Client name</label><input id="f-name" autocomplete="off"></div>
+                <div class="field"><label class="label" for="f-phone">Client phone</label><input id="f-phone" type="tel" placeholder="+1 555 123 4567" autocomplete="off"></div>
+            </div>
+            <div class="field"><label class="label" for="f-address">Address</label><input id="f-address" placeholder="Street, city, state ZIP" autocomplete="off">
+                <div class="field-hint">The map location is looked up from the address automatically.</div></div>
+            <div class="field"><label class="label" for="f-issue">Problem</label><textarea id="f-issue" placeholder="What does the client need?"></textarea></div>
+            <details class="field"><summary class="small muted" style="cursor:pointer">Exact coordinates (optional)</summary>
+                <div class="grid-2" style="margin-top:8px">
+                    <input id="f-lat" placeholder="Latitude, e.g. 30.2672" inputmode="decimal">
+                    <input id="f-lng" placeholder="Longitude, e.g. -97.7431" inputmode="decimal">
+                </div>
+            </details>
+            <div class="dialog-actions">
+                <button type="button" class="btn" id="ticket-cancel">Cancel</button>
+                <button class="btn btn-primary" id="ticket-save">Save ticket</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="assets/app.js"></script>
     <script>
-        // ---- API config -------------------------------------------------------------
-        // Priority: ?api=… in the URL  →  saved setting  →  default below.
-        // Default: localhost:5000 when opened locally, the Render backend everywhere else.
-        const PRODUCTION_API = 'https://lock-ops-backend.onrender.com';
-        const IS_LOCAL = location.protocol === 'file:' || ['localhost', '127.0.0.1', '[::1]', ''].includes(location.hostname);
-        const DEFAULT_API = IS_LOCAL ? 'http://localhost:5000' : PRODUCTION_API;
-        function storageGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-        function storageSet(k, v) { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) {} }
+    (async function () {
+        const { api, toast, banner, $, esc, money, round2, ago } = LockOps;
+        const user = await LockOps.requireAuth(['admin', 'dispatcher']);
+        LockOps.renderNav('dispatch');
+        LockOps.checkStorage($('#banner'));
 
-        const params = new URLSearchParams(location.search);
-        if (params.get('api')) storageSet('lockops.api', params.get('api'));
-        let API_BASE = (storageGet('lockops.api') || DEFAULT_API).replace(/\/+$/, '');
-        let API_KEY = storageGet('lockops.key') || '';
+        let tickets = [], technicians = [], candidates = [];
+        let selectedId = null, editingId = null, showAllTechs = false, fitted = false;
+        const statusClass = s => 'st-' + String(s).split(' ')[0];
+        const srcLabel = { form: '🌐 Web form', phone: '📞 Phone', imessage: '💬 iMessage', whatsapp: '🟢 WhatsApp' };
+        const chLabel = { imessage: 'iMessage', whatsapp: 'WhatsApp', discord: 'Discord' };
+        const initials = n => String(n || '?').replace(/\(.*?\)/g, '').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
-        function configureApi() {
-            const url = prompt('Backend URL (e.g. https://your-app.onrender.com):', API_BASE);
-            if (url === null) return;
-            const key = prompt('API key (leave blank if the backend has none):', API_KEY);
-            API_BASE = (url.trim() || DEFAULT_API).replace(/\/+$/, '');
-            API_KEY = (key || '').trim();
-            storageSet('lockops.api', API_BASE);
-            storageSet('lockops.key', API_KEY);
-            loadOrders();
-        }
+        // ---------------- map ----------------
+        const map = L.map('map', { worldCopyJump: true }).setView([37.8, -96], 4);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+        const ticketLayer = L.layerGroup().addTo(map), techLayer = L.layerGroup().addTo(map), lineLayer = L.layerGroup().addTo(map);
 
-        async function api(path, options = {}) {
-            const headers = { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(API_KEY ? { 'X-API-Key': API_KEY } : {}) };
-            const res = await fetch(API_BASE + path, { ...options, headers });
-            if (!res.ok) {
-                let msg = `${res.status} ${res.statusText}`;
-                try { const j = await res.json(); if (j.error) msg = j.error; } catch (e) {}
-                throw new Error(msg);
+        function drawMap() {
+            ticketLayer.clearLayers(); techLayer.clearLayers();
+            const pts = [];
+            for (const t of tickets) {
+                if (!t.location) continue;
+                const cls = t.id === selectedId ? 'selected' : (t.technicianId ? 'assigned' : '');
+                const m = L.marker([t.location.lat, t.location.lng], {
+                    icon: L.divIcon({ className: '', html: `<div class="pin ${cls}"><span>${esc(t.id.slice(-3))}</span></div>`, iconSize: [30, 30], iconAnchor: [4, 30] }),
+                    zIndexOffset: t.id === selectedId ? 1000 : 0, title: `#${t.id} ${t.client?.name || ''}`,
+                });
+                m.bindTooltip(`#${esc(t.id)} · ${esc(t.client?.name || t.client?.phone || '')}<br>${esc(t.address)}`);
+                m.on('click', () => select(t.id));
+                m.addTo(ticketLayer); pts.push([t.location.lat, t.location.lng]);
             }
-            return res;
+            for (const t of technicians) {
+                if (!t.position || !t.active) continue;
+                const m = L.marker([t.position.lat, t.position.lng], {
+                    icon: L.divIcon({ className: '', html: `<div class="tpin ${t.status} ${t.positionSource === 'base' ? 'base' : ''}">${esc(initials(t.name))}</div>`, iconSize: [28, 28], iconAnchor: [14, 14] }),
+                });
+                m.bindTooltip(`${esc(t.name)} · ${t.status}<br>${t.positionSource === 'live' ? `Live GPS ${ago(t.positionAt)}` : 'Base address'} · ${t.openJobs} open job(s)`);
+                m.addTo(techLayer); pts.push([t.position.lat, t.position.lng]);
+            }
+            if (!fitted && pts.length) { map.fitBounds(pts, { padding: [30, 30], maxZoom: 11 }); fitted = true; }
+            drawLines();
         }
 
-        // ---- State & helpers --------------------------------------------------------
-        let orders = [];
-        let selectedId = null;
-
-        const $ = id => document.getElementById(id);
-        const money = n => '$' + (Number(n) || 0).toFixed(2);
-        const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
-        const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        const statusClass = s => s === 'Dispatched' ? 'status-dispatched' : s === 'Closed' ? 'status-closed' : 'status-pending';
-
-        function showBanner(html, type = 'error', autoHideMs = 0) {
-            const b = $('banner');
-            b.className = `banner show ${type}`;
-            b.innerHTML = html;
-            clearTimeout(showBanner._t);
-            if (autoHideMs) showBanner._t = setTimeout(() => { b.className = 'banner'; }, autoHideMs);
-        }
-        function hideBanner() { $('banner').className = 'banner'; }
-
-        // Rough equirectangular projection of the continental US onto the canvas.
-        function project({ lat, lng }) {
-            const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-            return {
-                left: clamp(((lng + 125) / 59) * 100, 4, 96),
-                top: clamp(((50 - lat) / 26) * 100, 10, 96),
-            };
+        function drawLines(highlightId) {
+            lineLayer.clearLayers();
+            const t = tickets.find(x => x.id === selectedId);
+            if (!t?.location) return;
+            const shown = candidates.filter(c => c.position && (c.id === highlightId || c.id === t.technicianId || (c.status === 'available' && candidates.indexOf(c) < 3)));
+            for (const c of shown) {
+                const strong = c.id === highlightId || c.id === t.technicianId;
+                L.polyline([[t.location.lat, t.location.lng], [c.position.lat, c.position.lng]], {
+                    color: strong ? '#a5b4fc' : '#64748b', weight: strong ? 3 : 2, dashArray: strong ? null : '6 6', opacity: .9,
+                }).addTo(lineLayer);
+            }
         }
 
-        // ---- Rendering --------------------------------------------------------------
-        function render() {
-            const list = $('ticket-list');
-            list.innerHTML = orders.length ? orders.map(o => `
-                <div class="ticket-item ${o.id === selectedId ? 'active' : ''}" role="button" tabindex="0"
-                     onclick="selectTicket('${esc(o.id)}')" onkeydown="if(event.key==='Enter')selectTicket('${esc(o.id)}')">
-                    <div>
-                        <span class="status-badge ${statusClass(o.dispatcherStatus)}">${esc(o.dispatcherStatus)}</span>
-                        <div class="tech-name">📍 ${esc(o.address)} — ${esc(o.techName)}</div>
-                        <div class="ticket-details">Ticket #${esc(o.id)} | Issue: ${esc(o.notes)}</div>
-                    </div>
-                    <div class="right-align">
-                        <span class="ticket-details">Gross Collected</span>
-                        <div class="price-bold">${money(o.grossCollected)}</div>
-                    </div>
-                </div>`).join('') : '<div class="empty">No jobs in the ledger.</div>';
-
-            const map = $('map-canvas');
-            map.querySelectorAll('.map-pin').forEach(p => p.remove());
-            orders.filter(o => o.location).forEach(o => {
-                const { left, top } = project(o.location);
-                const pin = document.createElement('button');
-                pin.type = 'button';
-                pin.className = 'map-pin' + (o.id === selectedId ? ' active' : '');
-                pin.style.left = left + '%';
-                pin.style.top = top + '%';
-                pin.title = `${o.address} — ${o.dispatcherStatus}`;
-                pin.innerHTML = `<span class="pin-label">${esc(o.techName)} (#${esc(o.id)})</span><span class="pin-icon">📍</span>`;
-                pin.onclick = () => selectTicket(o.id);
-                map.appendChild(pin);
-            });
+        // ---------------- list ----------------
+        function filtered() {
+            const q = $('#search').value.trim().toLowerCase();
+            if (!q) return tickets;
+            return tickets.filter(t => [t.id, t.client?.name, t.client?.phone, t.address, t.issue].some(v => String(v || '').toLowerCase().includes(q)));
         }
 
-        function selectTicket(id) {
-            const o = orders.find(x => x.id === id);
-            if (!o) return;
+        function renderList() {
+            const list = filtered();
+            $('#count').textContent = `${list.length} ticket${list.length === 1 ? '' : 's'}`;
+            $('#ticket-list').innerHTML = list.length ? list.map(t => {
+                const unread = (t.unread?.client || 0) + (t.unread?.technician || 0);
+                return `<button type="button" class="ticket-item ${t.id === selectedId ? 'active' : ''}" data-id="${esc(t.id)}">
+                    <div class="row"><span class="badge ${statusClass(t.status)}">${esc(t.status)}</span>
+                        <span class="mono small">#${esc(t.id)}</span>
+                        <span class="chip">${srcLabel[t.source] || esc(t.source)}</span>
+                        ${unread ? `<span class="badge st-New">💬 ${unread} new</span>` : ''}
+                        <span class="spacer"></span><span class="small muted">${ago(t.createdAt)}</span></div>
+                    <div class="who" style="margin-top:6px">${esc(t.client?.name || t.client?.phone || 'Unknown client')}</div>
+                    <div class="addr">${t.location ? '📍' : '⚠️'} ${esc(t.address || 'No address')}</div>
+                    <div class="small muted" style="margin-top:4px">${t.technician ? `🧰 ${esc(t.technician.name)}` : 'Unassigned'}${t.issue ? ` · ${esc(t.issue.slice(0, 80))}` : ''}</div>
+                </button>`;
+            }).join('') : `<div class="empty">${tickets.length ? 'No tickets match your search.' : 'No open tickets. New requests from the web form, iMessage, WhatsApp or the “New ticket” button appear here.'}</div>`;
+        }
+        $('#ticket-list').addEventListener('click', e => { const b = e.target.closest('.ticket-item'); if (b) select(b.dataset.id); });
+
+        // ---------------- panel ----------------
+        async function select(id) {
             selectedId = id;
-            $('inspector-ticket-id').textContent = `#${o.id} (${o.techName})`;
-            $('inspector-notes').textContent = `${o.address} · ${o.dispatcherStatus}`;
-            $('gross-input').value = o.grossCollected;
-            $('parts-input').value = o.partCost;
-            $('rate-input').value = o.companyRate ?? 30;
-            const closed = o.dispatcherStatus === 'Closed';
-            ['gross-input', 'parts-input', 'rate-input', 'finalize-btn', 'dispatch-btn', 'whatsapp-btn'].forEach(k => $(k).disabled = closed);
-            $('finalize-btn').textContent = closed ? '🔒 Ticket Closed' : '✅ Finalize & Close Ticket';
-            $('form-error').textContent = '';
-            runCalculations();
-            render();
+            renderList();
+            const t = tickets.find(x => x.id === id);
+            if (t?.location) map.panTo([t.location.lat, t.location.lng]);
+            await loadCandidates();
+            renderPanel();
+            drawMap();
         }
 
-        // ---- Calculations (mirrors computeSplit() in backend/server.js) -------------
-        function readInputs() {
-            const gross = parseFloat($('gross-input').value);
-            const parts = parseFloat($('parts-input').value);
-            const rate = parseFloat($('rate-input').value);
-            let error = '';
-            if (!Number.isFinite(gross) || gross < 0) error = 'Gross collected must be a number ≥ 0.';
-            else if (!Number.isFinite(parts) || parts < 0) error = 'Part costs must be a number ≥ 0.';
-            else if (parts > gross) error = 'Part costs cannot exceed the amount collected.';
-            $('gross-input').classList.toggle('invalid', !Number.isFinite(gross) || gross < 0);
-            $('parts-input').classList.toggle('invalid', !Number.isFinite(parts) || parts < 0 || parts > gross);
-            return { gross, parts, rate, error };
-        }
-
-        function runCalculations() {
-            const { gross, parts, rate, error } = readInputs();
-            $('rate-display').textContent = `${rate}%`;
-            const g = Number.isFinite(gross) ? gross : 0;
-            const p = Number.isFinite(parts) ? parts : 0;
-            const net = Math.max(g - p, 0);
-            const company = round2(net * rate / 100);
-            $('calc-net').textContent = money(net);
-            $('calc-company').textContent = money(company);
-            $('calc-tech').textContent = money(g - company);
-            $('form-error').textContent = selectedId ? error : '';
-            const o = orders.find(x => x.id === selectedId);
-            $('finalize-btn').disabled = !o || o.dispatcherStatus === 'Closed' || Boolean(error);
-        }
-
-        // ---- Actions ----------------------------------------------------------------
-        async function loadOrders() {
-            try {
-                const data = await (await api('/api/orders')).json();
-                orders = data.ledger || [];
-                hideBanner();
-                if (!orders.some(o => o.id === selectedId)) selectedId = orders[0]?.id ?? null;
-                render();
-                if (selectedId) selectTicket(selectedId);
-            } catch (err) {
-                orders = [];
-                render();
-                showBanner(`Can't reach the backend at <code>${esc(API_BASE)}</code> (${esc(err.message)}). Start it with <code>cd backend &amp;&amp; npm install &amp;&amp; npm start</code>, or click <b>⚙️ API</b> to point at your deployed URL.`);
-            }
-        }
-
-        async function finalizeSplit() {
-            const { gross, parts, rate, error } = readInputs();
-            if (!selectedId || error) return;
-            const o = orders.find(x => x.id === selectedId);
-            if (!confirm(`Close ticket #${selectedId}?\n\nCompany remittance: ${$('calc-company').textContent}\nTechnician payout: ${$('calc-tech').textContent}`)) return;
-            $('finalize-btn').disabled = true;
-            try {
-                const { record } = await (await api('/api/dispatcher/finalize-split', {
-                    method: 'POST',
-                    body: JSON.stringify({ orderId: selectedId, grossCollected: gross, partCost: parts, customCompanyRate: rate }),
-                })).json();
-                Object.assign(o, record);
-                selectTicket(record.id);
-                showBanner(`Ticket #${esc(record.id)} closed — ${money(record.companyRemittanceDue)} due to the company.`, 'ok', 4000);
-            } catch (err) {
-                $('form-error').textContent = err.message;
-                runCalculations();
-            }
-        }
-
-        async function sendDispatch(channel) {
+        async function loadCandidates() {
+            candidates = [];
             if (!selectedId) return;
-            const btn = $(channel === 'whatsapp' ? 'whatsapp-btn' : 'dispatch-btn');
-            const label = channel === 'whatsapp' ? 'WhatsApp' : 'Discord';
-            btn.disabled = true;
+            try { candidates = (await api(`/api/tickets/${selectedId}/candidates`)).candidates; } catch (err) { toast(err.message, 'error'); }
+        }
+
+        function renderPanel() {
+            const t = tickets.find(x => x.id === selectedId);
+            const panel = $('#panel');
+            if (!t) { panel.innerHTML = '<div class="empty">Select a ticket to see details and the nearest technicians.</div>'; return; }
+            const open = !['Closed', 'Cancelled'].includes(t.status);
+            const locNote = { gps: 'exact GPS from client', geocoded: 'from address', manual: 'entered by dispatcher', whatsapp: 'shared on WhatsApp' }[t.locationSource] || '';
+            const list = candidates.filter(c => showAllTechs || c.status === 'available' || c.id === t.technicianId)
+                .sort((a, b) => (b.id === t.technicianId) - (a.id === t.technicianId));
+            const hidden = candidates.length - list.length;
+            const oldPayout = $('#payout');
+            const keepPayout = oldPayout && oldPayout.dataset.key === `${t.id}|${t.status}` ? oldPayout : null;
+            const oldConv = $('#conversation');
+            const keepConv = oldConv && oldConv.dataset.ticket === t.id ? oldConv : null;
+            const scroll = panel.scrollTop;
+
+            panel.innerHTML = `
+                <div class="row"><h2>Ticket #${esc(t.id)}</h2><span class="badge ${statusClass(t.status)}">${esc(t.status)}</span><span class="spacer"></span>
+                    ${open ? `<button type="button" class="btn btn-sm" data-act="edit">Edit</button><button type="button" class="btn btn-sm btn-danger" data-act="cancel">Cancel ticket</button>` : ''}</div>
+                <p class="small muted">${srcLabel[t.source] || esc(t.source)} · created ${ago(t.createdAt)}</p>
+                <dl class="kv">
+                    <dt>Client</dt><dd><b>${esc(t.client?.name || '—')}</b>${t.client?.phone ? ` · <a href="tel:${esc(t.client.phone)}">${esc(t.client.phone)}</a>` : ''}</dd>
+                    <dt>Address</dt><dd>${esc(t.address || '—')}<br>${t.location
+                        ? `<span class="small muted">Map pin ${esc(locNote)}</span> · <a href="${esc(t.directionsUrl)}" target="_blank" rel="noopener">Directions ↗</a>`
+                        : `<span class="small" style="color:#fcd34d">⚠️ Not on the map: the address couldn't be found. Edit it, or add coordinates.</span>`}</dd>
+                    <dt>Problem</dt><dd>${esc(t.issue || '—')}</dd>
+                </dl>
+
+                <div class="section">
+                    <h3 style="margin-bottom:8px">Technician</h3>
+                    ${t.technician ? `<div class="row"><b>${esc(t.technician.name)}</b><span class="chip">${chLabel[t.technician.channel] || ''}</span>${t.assignedAt ? `<span class="small muted">assigned ${ago(t.assignedAt)}</span>` : ''}
+                        <span class="spacer"></span>${open ? `<button type="button" class="btn btn-sm" data-act="resend">Resend job</button><button type="button" class="btn btn-sm" data-act="unassign">Unassign</button>` : ''}</div>`
+                        : '<div class="muted">Not assigned yet.</div>'}
+                </div>
+
+                ${open ? `<div class="section">
+                    <div class="row" style="margin-bottom:8px"><h3>Nearest technicians</h3><span class="spacer"></span>
+                        <label class="check small"><input type="checkbox" id="show-all" ${showAllTechs ? 'checked' : ''}> Show busy &amp; off</label></div>
+                    ${!t.location ? '<div class="small muted" style="margin-bottom:8px">Distances need the ticket on the map.</div>' : ''}
+                    <div id="cands">${list.length ? list.map(c => `
+                        <div class="cand" data-id="${esc(c.id)}">
+                            <span class="dot dot-${c.status}" title="${c.status}"></span>
+                            <div class="info">
+                                <div class="name">${esc(c.name)}</div>
+                                <div class="small muted">${chLabel[c.channel]} · ${c.positionSource === 'live' ? `live GPS ${ago(c.positionAt)}` : c.positionSource === 'base' ? 'base address' : 'no location'} · ${c.openJobs} open job${c.openJobs === 1 ? '' : 's'}${c.skills.length ? ` · ${esc(c.skills.join(', '))}` : ''}</div>
+                            </div>
+                            <span class="dist">${c.distance === null ? '—' : `${c.distance < 10 ? c.distance.toFixed(1) : Math.round(c.distance)} ${c.distanceUnit}`}</span>
+                            ${c.id === t.technicianId ? '<span class="badge st-Assigned">Assigned</span>' : `<button type="button" class="btn btn-sm btn-primary" data-assign="${esc(c.id)}">${t.technicianId ? 'Reassign' : 'Assign'}</button>`}
+                        </div>`).join('') : `<div class="empty">${candidates.length ? 'No available technicians right now.' : 'No technicians yet — add them on the Technicians page.'}</div>`}
+                        ${hidden && !showAllTechs ? `<div class="small muted">${hidden} busy or off technician${hidden === 1 ? '' : 's'} hidden.</div>` : ''}
+                    </div>
+                </div>` : ''}
+
+                <div class="section" id="conversation"></div>
+                <div class="section" id="payout"></div>`;
+
+            // Keep the conversation and payout sections (and anything typed in them) across refreshes.
+            if (keepConv) $('#conversation').replaceWith(keepConv);
+            else if (window.Conversation) { $('#conversation').dataset.ticket = t.id; Conversation.mount($('#conversation'), t, { onChange: refresh }); }
+            if (keepConv && window.Conversation) Conversation.update(t);
+            if (keepPayout) $('#payout').replaceWith(keepPayout); else renderPayout(t);
+            panel.scrollTop = scroll;
+        }
+
+        function renderPayout(t) {
+            const box = $('#payout');
+            box.dataset.key = `${t.id}|${t.status}`;
+            const closed = t.status === 'Closed', cancelled = t.status === 'Cancelled';
+            if (cancelled) { box.innerHTML = ''; return; }
+            box.innerHTML = `
+                <h3 style="margin-bottom:10px">${closed ? 'Payout (closed)' : 'Payout & close'}</h3>
+                <div class="grid-2">
+                    <div class="field"><label class="label" for="p-gross">Collected ($)</label><input id="p-gross" type="number" min="0" step="0.01" value="${closed ? t.grossCollected : (t.grossCollected || '')}" ${closed ? 'disabled' : ''}></div>
+                    <div class="field"><label class="label" for="p-parts">Parts cost ($)</label><input id="p-parts" type="number" min="0" step="0.01" value="${closed ? t.partCost : (t.partCost || 0)}" ${closed ? 'disabled' : ''}></div>
+                </div>
+                <div class="row"><label class="label" for="p-rate" style="margin:0">Company share</label><span class="spacer"></span><b class="mono" id="p-rate-out"></b></div>
+                <input id="p-rate" type="range" min="0" max="100" step="1" value="${t.companyRate ?? 30}" ${closed ? 'disabled' : ''}>
+                <div class="calc-row"><span>Net after parts</span><span id="p-net"></span></div>
+                <div class="calc-row"><span>Company remittance due</span><span id="p-company"></span></div>
+                <div class="calc-row calc-total"><span>Technician payout</span><span id="p-tech"></span></div>
+                <div class="small" id="p-error" style="color:#fca5a5;min-height:18px"></div>
+                ${closed ? `<div class="small muted">Closed ${ago(t.closedAt)}.</div>` : '<button type="button" class="btn btn-ok btn-block" id="p-finalize">✅ Finalize payout &amp; close ticket</button>'}`;
+            ['#p-gross', '#p-parts', '#p-rate'].forEach(s => $(s).addEventListener('input', calc));
+            if (!closed) $('#p-finalize').onclick = () => finalize(t);
+            calc();
+        }
+
+        function calc() {
+            const g = parseFloat($('#p-gross').value), p = parseFloat($('#p-parts').value), r = parseFloat($('#p-rate').value);
+            $('#p-rate-out').textContent = `${r}%`;
+            const gg = Number.isFinite(g) ? g : 0, pp = Number.isFinite(p) ? p : 0;
+            const net = Math.max(gg - pp, 0), company = round2(net * r / 100);
+            $('#p-net').textContent = money(net); $('#p-company').textContent = money(company); $('#p-tech').textContent = money(gg - company);
+            let err = '';
+            if (!Number.isFinite(g) || g < 0) err = 'Enter the amount collected.';
+            else if (!Number.isFinite(p) || p < 0) err = 'Parts cost must be 0 or more.';
+            else if (p > g) err = 'Parts cost can’t be more than the amount collected.';
+            $('#p-error').textContent = err;
+            if ($('#p-finalize')) $('#p-finalize').disabled = Boolean(err);
+            return { g, p, r, err };
+        }
+
+        async function finalize(t) {
+            const { g, p, r, err } = calc();
+            if (err) return;
+            if (!confirm(`Close ticket #${t.id}?\n\nCompany remittance: ${$('#p-company').textContent}\nTechnician payout: ${$('#p-tech').textContent}`)) return;
             try {
-                const data = await (await api(`/api/dispatch/${channel}`, {
-                    method: 'POST', body: JSON.stringify({ orderId: selectedId }),
-                })).json();
-                Object.assign(orders.find(x => x.id === selectedId), data.record);
-                selectTicket(selectedId);
-                const where = channel === 'whatsapp' ? ` to ${esc(data.sentTo)}` : '';
-                const envHint = channel === 'whatsapp' ? 'WHATSAPP_TOKEN and WHATSAPP_PHONE_NUMBER_ID' : 'DISCORD_WEBHOOK_URL';
-                showBanner(data.mocked
-                    ? `${label} alert for #${esc(data.record.id)} logged${where} (mock mode — set ${envHint} on the backend to send for real).`
-                    : `${label} alert for #${esc(data.record.id)} sent${where}.`, 'ok', 8000);
+                await api(`/api/tickets/${t.id}/finalize`, { method: 'POST', body: { grossCollected: g, partCost: p, customCompanyRate: r } });
+                toast(`Ticket #${t.id} closed.`);
+                await refresh();
+            } catch (e) { $('#p-error').textContent = e.message; }
+        }
+
+        $('#panel').addEventListener('click', async e => {
+            const t = tickets.find(x => x.id === selectedId);
+            if (!t) return;
+            const assignId = e.target.closest('[data-assign]')?.dataset.assign;
+            const act = e.target.closest('[data-act]')?.dataset.act;
+            if (assignId) return assignTo(t, assignId);
+            if (act === 'edit') return openTicketDialog(t);
+            if (act === 'cancel') {
+                if (!confirm(`Cancel ticket #${t.id}?`)) return;
+                return run(() => api(`/api/tickets/${t.id}`, { method: 'PUT', body: { status: 'Cancelled' } }), `Ticket #${t.id} cancelled.`);
+            }
+            if (act === 'unassign') return run(() => api(`/api/tickets/${t.id}/unassign`, { method: 'POST' }), 'Technician unassigned.');
+            if (act === 'resend') return assignTo(t, t.technicianId, true);
+        });
+        $('#panel').addEventListener('change', e => { if (e.target.id === 'show-all') { showAllTechs = e.target.checked; renderPanel(); drawLines(); } });
+        $('#panel').addEventListener('mouseover', e => { const c = e.target.closest('.cand'); if (c) drawLines(c.dataset.id); });
+        $('#panel').addEventListener('mouseleave', () => drawLines());
+
+        async function assignTo(t, techId, resend) {
+            const c = candidates.find(x => x.id === techId);
+            if (!resend && c && c.status !== 'available' && !confirm(`${c.name} is ${c.status}. Assign anyway?`)) return;
+            const btn = document.querySelector(`[data-assign="${techId}"]`); if (btn) btn.disabled = true;
+            try {
+                const r = await api(`/api/tickets/${t.id}/assign`, { method: 'POST', body: { technicianId: techId } });
+                const n = r.notification;
+                const name = c?.name || r.ticket.technician?.name;
+                if (!n) toast(`Assigned to ${name}.`);
+                else if (!n.ok) toast(`Assigned to ${name}, but the message failed: ${n.error}`, 'error');
+                else if (n.mocked) toast(`Assigned to ${name}. ${chLabel[n.channel]} isn't set up in Settings, so the message was only logged.`);
+                else toast(`Assigned to ${name} — job sent by ${chLabel[n.channel]}${n.to && n.to !== 'webhook' ? ` to ${n.to}` : ''}.`);
+                await refresh();
+            } catch (e) { toast(e.message, 'error'); if (btn) btn.disabled = false; }
+        }
+
+        async function run(fn, msg) {
+            try { await fn(); if (msg) toast(msg); await refresh(); } catch (e) { toast(e.message, 'error'); }
+        }
+
+        // ---------------- new / edit ticket ----------------
+        const dlg = $('#ticket-dialog');
+        function openTicketDialog(t) {
+            editingId = t?.id || null;
+            $('#ticket-dialog-title').textContent = t ? `Edit ticket #${t.id}` : 'New ticket';
+            $('#f-name').value = t?.client?.name || ''; $('#f-phone').value = t?.client?.phone || '';
+            $('#f-address').value = t?.address || ''; $('#f-issue').value = t?.issue || '';
+            $('#f-lat').value = t?.location?.lat ?? ''; $('#f-lng').value = t?.location?.lng ?? '';
+            dlg.showModal();
+        }
+        $('#new-btn').onclick = () => openTicketDialog(null);
+        $('#ticket-cancel').onclick = () => dlg.close();
+        $('#ticket-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const lat = parseFloat($('#f-lat').value), lng = parseFloat($('#f-lng').value);
+            const body = { client: { name: $('#f-name').value, phone: $('#f-phone').value }, address: $('#f-address').value, issue: $('#f-issue').value };
+            const t = editingId && tickets.find(x => x.id === editingId);
+            const coordsChanged = Number.isFinite(lat) && Number.isFinite(lng) && !(t?.location && t.location.lat === lat && t.location.lng === lng);
+            if (coordsChanged) body.location = { lat, lng };
+            $('#ticket-save').disabled = true;
+            try {
+                const r = editingId
+                    ? await api(`/api/tickets/${editingId}`, { method: 'PUT', body })
+                    : await api('/api/tickets', { method: 'POST', body });
+                dlg.close();
+                toast(r.ticket.location ? `Ticket #${r.ticket.id} saved.` : `Ticket #${r.ticket.id} saved, but the address wasn't found on the map. Check it or add coordinates.`, r.ticket.location ? 'ok' : 'error');
+                selectedId = r.ticket.id;
+                await refresh();
+            } catch (err) { toast(err.message, 'error'); }
+            finally { $('#ticket-save').disabled = false; }
+        });
+
+        // ---------------- data ----------------
+        async function refresh() {
+            try {
+                const [tk, te] = await Promise.all([api(`/api/tickets?scope=${$('#scope').value}`), api('/api/technicians')]);
+                tickets = tk.tickets; technicians = te.technicians;
+                if (selectedId && !tickets.some(t => t.id === selectedId)) { selectedId = null; candidates = []; }
+                if (selectedId) await loadCandidates();
+                renderList(); renderPanel(); drawMap();
             } catch (err) {
-                showBanner(`${label} dispatch failed: ${esc(err.message)}`);
-            } finally {
-                const o = orders.find(x => x.id === selectedId);
-                btn.disabled = !o || o.dispatcherStatus === 'Closed';
+                if (err.status !== 401) banner($('#banner'), esc(err.message));
             }
         }
 
-        async function downloadCsv() {
+        $('#scope').onchange = refresh;
+        $('#search').oninput = renderList;
+        $('#refresh-btn').onclick = refresh;
+        $('#csv-btn').onclick = async () => {
             try {
-                const blob = await (await api('/api/accounting/export-csv')).blob();
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'lock-ops-ledger.csv';
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-            } catch (err) {
-                showBanner(`CSV export failed: ${esc(err.message)}`);
-            }
-        }
+                const blob = await (await api('/api/accounting/export-csv', { raw: true })).blob();
+                const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'lock-ops-ledger.csv' });
+                document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+            } catch (e) { toast(`CSV export failed: ${e.message}`, 'error'); }
+        };
 
-        runCalculations();
-        loadOrders();
+        const deepLink = new URLSearchParams(location.search).get('ticket');
+        await refresh();
+        if (deepLink && tickets.some(t => t.id === deepLink)) select(deepLink);
+        setInterval(() => { if (!document.hidden && !dlg.open) refresh(); }, 15000);
+    })();
     </script>
 </body>
 </html>
