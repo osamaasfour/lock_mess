@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lock-Ops · Settings</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <style>
+        .layout { display: grid; grid-template-columns: 200px minmax(0, 760px); gap: 24px; align-items: start; }
+        @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } .toc { display: none; } }
+        .toc { position: sticky; top: 80px; display: flex; flex-direction: column; gap: 2px; }
+        .toc a { color: var(--soft); text-decoration: none; padding: 6px 10px; border-radius: 6px; }
+        .toc a:hover { background: var(--panel); color: #fff; }
+        .card + .card { margin-top: 20px; }
+        .card p.intro { margin: -4px 0 14px; color: var(--muted); }
+        .src { font-size: 11px; color: #fcd34d; margin-left: 6px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+        .secret-row, .copy-row { display: flex; gap: 8px; min-width: 0; }
+        .secret-row input, .copy-row input { min-width: 0; }
+        .field-hint code { overflow-wrap: anywhere; }
+        .copy-row { display: flex; gap: 8px; }
+        .copy-row input { font-family: ui-monospace, monospace; font-size: 12px; }
+        h1 { font-size: 22px; font-weight: 900; margin-bottom: 16px; }
+        .status-pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-left: 8px; }
+        .on { background: #052e16; color: #86efac; } .off-pill { background: #27272a; color: #a1a1aa; }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <h1>Settings</h1>
+        <div id="banner" class="hidden"></div>
+        <div class="layout">
+            <nav class="toc">
+                <a href="#company">Company</a><a href="#imessage">iMessage (Sendblue)</a><a href="#whatsapp">WhatsApp</a>
+                <a href="#discord">Discord</a><a href="#webhooks">Receiving replies</a><a href="#users">Users</a>
+            </nav>
+            <div id="sections"><div class="card muted">Loading…</div></div>
+        </div>
+    </div>
+
+    <dialog id="user-dlg">
+        <form id="user-form">
+            <div class="dialog-head"><h2 id="user-title">Add user</h2></div>
+            <div class="field"><label class="label" for="u-name">Name</label><input id="u-name" required></div>
+            <div class="field"><label class="label" for="u-email">Email</label><input id="u-email" type="email" required autocomplete="off"></div>
+            <div class="field"><label class="label" for="u-role">Role</label>
+                <select id="u-role"><option value="dispatcher">Dispatcher — tickets, assigning, messages</option><option value="admin">Admin — everything incl. settings &amp; users</option></select></div>
+            <div class="field"><label class="label" for="u-password" id="u-pw-label">Password</label><input id="u-password" type="text" minlength="8" autocomplete="off" placeholder="8+ characters"></div>
+            <label class="check field hidden" id="u-disabled-wrap"><input type="checkbox" id="u-disabled"> Disabled (can’t log in)</label>
+            <div class="dialog-actions">
+                <button type="button" class="btn btn-danger hidden" id="u-delete" style="margin-right:auto">Delete</button>
+                <button type="button" class="btn" id="u-cancel">Cancel</button>
+                <button class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="assets/app.js"></script>
+    <script>
+    (async function () {
+        const { api, toast, banner, $, $$, esc } = LockOps;
+        const me = await LockOps.requireAuth(['admin']);
+        LockOps.renderNav('settings');
+        LockOps.checkStorage($('#banner'));
+
+        // Labels and help for each field the server exposes.
+        const SECTIONS = [
+            { key: 'company', title: 'Company', intro: 'Basics used across the app and in messages to technicians.', fields: [
+                ['name', 'Company name'],
+                ['frontendUrl', 'Dashboard address', `Used in links sent to technicians (their job page). This site is <code>${esc(location.origin)}</code>.`, { suggest: location.origin }],
+                ['distanceUnit', 'Distance unit', '', { labels: { mi: 'Miles', km: 'Kilometres' } }],
+                ['defaultCompanyRate', 'Default company share (%)', 'Starting value of the payout slider for new tickets.'],
+                ['defaultCountryCode', 'Default country code', 'Added to phone numbers typed without “+”, e.g. 1 for the US.'],
+            ] },
+            { key: 'imessage', title: 'iMessage (Sendblue)', intro: 'Send and receive iMessages (with SMS fallback for Android) through your Sendblue line. Keys: Sendblue dashboard → API Keys.', fields: [
+                ['apiKeyId', 'API key ID'],
+                ['apiSecret', 'API secret key'],
+                ['fromNumber', 'Your Sendblue number', 'The line messages are sent from, e.g. +15125550000. Required on Sendblue’s free shared-line plan.'],
+                ['webhookSecret', 'Webhook secret', 'Generated automatically. It is part of the webhook URL below; change it only if that URL leaks.'],
+            ], configured: s => s.apiKeyId.value && s.apiSecret.set },
+            { key: 'whatsapp', title: 'WhatsApp (Meta Cloud API)', intro: 'From developers.facebook.com → your app → WhatsApp → API Setup.', fields: [
+                ['token', 'Access token', 'Temporary tokens expire after ~24 h; use a System User token for production.'],
+                ['phoneNumberId', 'Phone number ID', 'The long ID under the “From” number — not the phone number itself.'],
+                ['appSecret', 'App secret', 'App settings → Basic → App secret. Needed to accept incoming replies safely.'],
+                ['verifyToken', 'Webhook verify token', 'Generated automatically. Paste it into Meta’s webhook setup (see “Receiving replies”).'],
+                ['messageMode', 'Job alerts are sent as', 'Templates can start a conversation any time. Plain text only reaches people who messaged you in the last 24 h.', { labels: { template: 'Approved template', text: 'Plain text' } }],
+                ['template', 'Template name', '“hello_world” is Meta’s test template. Your own template gets 3 variables: {{1}} job #, {{2}} address + map link, {{3}} details.'],
+                ['templateLang', 'Template language code'],
+                ['apiVersion', 'Graph API version'],
+                ['testRecipient', 'Test recipient', 'While testing, every WhatsApp message goes to this number instead. Clear it to message real technicians and clients.'],
+            ], configured: s => s.token.set && s.phoneNumberId.value },
+            { key: 'discord', title: 'Discord', intro: 'A webhook only posts job alerts. Add a bot to open a thread per job and read technicians’ replies in the dashboard.', fields: [
+                ['webhookUrl', 'Webhook URL', 'Server Settings → Integrations → Webhooks → Copy Webhook URL.'],
+                ['botToken', 'Bot token', 'discord.com/developers → your app → Bot → Reset Token. Turn on “Message Content Intent” on the same page.'],
+                ['channelId', 'Dispatch channel ID', 'Right-click the channel → Copy Channel ID (needs Developer Mode).'],
+            ], configured: s => s.webhookUrl.set || (s.botToken.set && s.channelId.value) },
+        ];
+
+        let data = null;
+
+        function fieldHtml(section, [field, label, hint = '', opts = {}]) {
+            const f = data.settings[section][field];
+            const id = `${section}-${field}`;
+            const src = f.source === 'env' ? '<span class="src">from server environment</span>' : '';
+            let control;
+            if (f.secret) {
+                control = `<div class="secret-row"><input id="${id}" type="password" autocomplete="new-password" placeholder="${f.set ? `Saved ${esc(f.hint)} — leave blank to keep` : 'Not set'}">
+                    ${f.set && f.source === 'settings' ? `<button type="button" class="btn btn-sm btn-danger" data-clear="${section}.${field}">Remove</button>` : ''}</div>`;
+            } else if (f.options) {
+                control = `<select id="${id}">${f.options.map(o => `<option value="${o}" ${o === f.value ? 'selected' : ''}>${esc(opts.labels?.[o] || o)}</option>`).join('')}</select>`;
+            } else {
+                control = `<div class="copy-row"><input id="${id}" value="${esc(f.source === 'default' ? '' : f.value)}" placeholder="${esc(f.source === 'default' ? f.value : '')}">
+                    ${opts.suggest && f.value !== opts.suggest ? `<button type="button" class="btn btn-sm" data-suggest="${id}" data-value="${esc(opts.suggest)}">Use this site</button>` : ''}</div>`;
+            }
+            return `<div class="field"><label class="label" for="${id}">${esc(label)}${src}</label>${control}${hint ? `<div class="field-hint">${hint}</div>` : ''}</div>`;
+        }
+
+        function render() {
+            const w = data.webhooks || {};
+            const copy = (label, value, hint) => `<div class="field"><label class="label">${label}</label><div class="copy-row"><input readonly value="${esc(value || '')}"><button type="button" class="btn btn-sm" data-copy="${esc(value || '')}">Copy</button></div>${hint ? `<div class="field-hint">${hint}</div>` : ''}</div>`;
+            $('#sections').innerHTML = SECTIONS.map(s => {
+                const on = s.configured ? s.configured(data.settings[s.key]) : null;
+                return `<form class="card" id="${s.key}" data-section="${s.key}">
+                    <div class="card-head"><h2>${esc(s.title)}</h2>${on === null ? '' : `<span class="status-pill ${on ? 'on' : 'off-pill'}">${on ? 'Connected' : 'Not set up — mock mode'}</span>`}</div>
+                    <p class="intro">${s.intro}</p>
+                    ${s.fields.map(f => fieldHtml(s.key, f)).join('')}
+                    <div class="row"><span class="spacer"></span><button class="btn btn-primary">Save ${esc(s.title.split(' ')[0])}</button></div>
+                </form>`;
+            }).join('') + `
+                <section class="card" id="webhooks">
+                    <div class="card-head"><h2>Receiving replies</h2></div>
+                    ${w.imessage ? `
+                        <p class="intro">Paste these into each service so messages from clients and technicians reach the dashboard.</p>
+                        <h3>iMessage (Sendblue)</h3><p class="small muted">Sendblue dashboard → API → Webhooks → “Receive”.</p>
+                        ${copy('Receive webhook URL', w.imessage.url)}
+                        <h3 style="margin-top:14px">WhatsApp</h3><p class="small muted">Meta app → WhatsApp → Configuration → Webhook → Edit. Then subscribe to the <b>messages</b> field.</p>
+                        ${copy('Callback URL', w.whatsapp.url)}${copy('Verify token', w.whatsapp.verifyToken)}
+                        <h3 style="margin-top:14px">Discord</h3><p class="small muted">${w.discord.botActive ? '✅ The bot checks job threads for replies every few seconds.' : 'Add a bot token and channel ID above to read replies from Discord job threads.'}</p>`
+                    : '<p class="muted">Two-way messaging is not enabled on this server version yet.</p>'}
+                </section>
+                <section class="card" id="users">
+                    <div class="card-head"><h2>Users</h2><span class="spacer"></span><button type="button" class="btn btn-primary btn-sm" id="add-user">＋ Add user</button></div>
+                    <p class="intro">Admins and dispatchers. Technician logins are managed on the Technicians page.</p>
+                    <div class="table-wrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr></thead><tbody id="user-rows"></tbody></table></div>
+                </section>`;
+            renderUsers();
+        }
+
+        let users = [];
+        function renderUsers() {
+            $('#user-rows').innerHTML = users.map(u => `<tr>
+                <td>${esc(u.name)}${u.id === me.id ? ' <span class="small muted">(you)</span>' : ''}</td><td>${esc(u.email)}</td>
+                <td><span class="badge ${u.disabled ? 'tech-off' : u.role === 'admin' ? 'st-New' : 'st-Assigned'}">${u.disabled ? 'disabled' : esc(u.role)}</span></td>
+                <td><button type="button" class="btn btn-sm" data-user="${esc(u.id)}">Edit</button></td></tr>`).join('');
+        }
+
+        async function load() {
+            try {
+                [data, { users }] = await Promise.all([api('/api/settings'), api('/api/users')]);
+                render();
+            } catch (e) { if (e.status !== 401) banner($('#banner'), esc(e.message)); }
+        }
+
+        // save one section: only send fields that changed
+        $('#sections').addEventListener('submit', async e => {
+            const form = e.target.closest('form[data-section]');
+            if (!form) return;
+            e.preventDefault();
+            const key = form.dataset.section;
+            const patch = {};
+            for (const [field] of SECTIONS.find(s => s.key === key).fields) {
+                const f = data.settings[key][field];
+                const v = $(`#${key}-${field}`).value.trim();
+                if (f.secret) { if (v) patch[field] = v; }
+                else if (v !== (f.source === 'default' ? '' : String(f.value))) patch[field] = v;
+            }
+            if (!Object.keys(patch).length) return toast('Nothing changed.');
+            try { await api('/api/settings', { method: 'PUT', body: { settings: { [key]: patch } } }); toast('Saved.'); await load(); location.hash = key; }
+            catch (err) { toast(err.message, 'error'); }
+        });
+
+        $('#sections').addEventListener('click', async e => {
+            const clear = e.target.closest('[data-clear]')?.dataset.clear;
+            const copyVal = e.target.closest('[data-copy]')?.dataset.copy;
+            const sug = e.target.closest('[data-suggest]');
+            const userId = e.target.closest('[data-user]')?.dataset.user;
+            if (clear) {
+                const [section, field] = clear.split('.');
+                if (!confirm('Remove this saved key?')) return;
+                try { await api('/api/settings', { method: 'PUT', body: { settings: { [section]: { [field]: null } } } }); toast('Removed.'); await load(); }
+                catch (err) { toast(err.message, 'error'); }
+            } else if (copyVal !== undefined) {
+                try { await navigator.clipboard.writeText(copyVal); toast('Copied.'); } catch { toast('Copy failed — select the text and copy it manually.', 'error'); }
+            } else if (sug) {
+                $(`#${sug.dataset.suggest}`).value = sug.dataset.value;
+            } else if (e.target.id === 'add-user') openUser(null);
+            else if (userId) openUser(users.find(u => u.id === userId));
+        });
+
+        // ---- users ----
+        const dlg = $('#user-dlg');
+        let editing = null;
+        function openUser(u) {
+            editing = u;
+            $('#user-title').textContent = u ? `Edit ${u.name}` : 'Add user';
+            $('#u-name').value = u?.name || ''; $('#u-email').value = u?.email || ''; $('#u-role').value = u?.role || 'dispatcher';
+            $('#u-password').value = ''; $('#u-password').required = !u;
+            $('#u-pw-label').textContent = u ? 'New password (leave blank to keep)' : 'Password';
+            $('#u-disabled').checked = Boolean(u?.disabled);
+            $('#u-disabled-wrap').classList.toggle('hidden', !u || u.id === me.id);
+            $('#u-delete').classList.toggle('hidden', !u || u.id === me.id);
+            dlg.showModal();
+        }
+        $('#u-cancel').onclick = () => dlg.close();
+        $('#user-form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const body = { name: $('#u-name').value, email: $('#u-email').value, role: $('#u-role').value };
+            if ($('#u-password').value) body.password = $('#u-password').value;
+            if (editing && editing.id !== me.id) body.disabled = $('#u-disabled').checked;
+            try {
+                await api(editing ? `/api/users/${editing.id}` : '/api/users', { method: editing ? 'PUT' : 'POST', body });
+                dlg.close(); toast('User saved.'); await load();
+            } catch (err) { toast(err.message, 'error'); }
+        });
+        $('#u-delete').onclick = async () => {
+            if (!editing || !confirm(`Delete ${editing.name}'s login?`)) return;
+            try { await api(`/api/users/${editing.id}`, { method: 'DELETE' }); dlg.close(); toast('User deleted.'); await load(); }
+            catch (err) { toast(err.message, 'error'); }
+        };
+
+        await load();
+        if (location.hash) document.querySelector(location.hash)?.scrollIntoView();
+    })();
+    </script>
+</body>
+</html>

@@ -1,107 +1,96 @@
-# Lock-Ops Controller 🛠️
+# 🔐 Lock-Ops Dispatch
 
-**Lock-Ops Controller** is a centralized, live dispatch dashboard and financial remittance system designed specifically for managing field locksmith operations across the United States. It connects dispatchers directly with field technicians and streamlines manual data parsing workflows down to instantaneous clicks.
+Dispatch software for a locksmith company: take client requests, see clients and technicians on a live map, send the job to the nearest available technician by iMessage, WhatsApp or Discord, and settle the payout split.
 
-Live Frontend Client Prototype: [lockmess-frontend.vercel.app](https://lockmess-frontend.vercel.app)  
-Live Backend REST Engine Endpoint: [lock-ops-backend.onrender.com](https://lock-ops-backend.onrender.com)
-
----
-
-## 🗺️ Architectural Ecosystem Overview
-
-```text
-[ Clients ] ➡️ Inbound Order Matrix
-                     ⬇️
-             [ Web App Backend API (Render) ] 
-                     ⬇️
- [ Discord API ]  ⬅️ (Dispatch Vectors) ➡️ [ WhatsApp Business API ]
-                     ⬇️
-         [ On-the-Ground Technicians ]
-```
+* **Dashboard:** [lockmess-frontend.vercel.app](https://lockmess-frontend.vercel.app) (Vercel, `frontend/`)
+* **API:** [lock-ops-backend.onrender.com](https://lock-ops-backend.onrender.com) (Render, `backend/`)
 
 ---
 
-## ✨ Features Implemented
+## Pages
 
-*   **Live US Field Tracking Map Canvas:** Visualizes task clusters and contractor dispatch pins seamlessly across key metropolitan areas (Austin, Miami, Los Angeles).
-*   **Active Operations Influx Stream:** Aggregates regional job cards (`Review Pending` vs. `Dispatched`) directly into a data logging matrix.
-*   **Custom Financial Rule Inspector:** Dynamically tracks the downstream independent contractor model. Calculates on-site retail collections minus out-of-pocket lock hardware assembly costs, splitting company remittance allocations live via adjustable ranges.
-*   **Discord Dispatch Alerts:** Sends a job alert to a Discord channel through a webhook (logged in mock mode when no webhook is configured).
-*   **WhatsApp Dispatch:** Messages the technician through Meta's WhatsApp Cloud API (mock mode until credentials are set).
-*   **One-Click Accounting Ledger Exports:** Instantly compiles and exports the state registry database into downloadable `.CSV` spreadsheets for external evaluation or payroll analysis.
+| Page | Who | What it does |
+|---|---|---|
+| `index.html` — **Dispatch** | Admins, dispatchers | Map of tickets and technicians, ticket list, nearest technicians ranked by distance, assign/reassign, payout split and closing, CSV export. |
+| `technicians.html` — **Technicians** | Admins (dispatchers read-only) | Add/edit technicians: phone, preferred channel, Discord ID, skills, base address, status, and their GPS-page login. |
+| `settings.html` — **Settings** | Admins | Company details, your own iMessage (Sendblue), WhatsApp and Discord keys, and user accounts. |
+| `tech.html` — **Technician page** | Technicians (on their phone) | Set Available/Busy/Off, share live GPS, see assigned jobs with directions, mark *On my way* / *Job done*. |
+| `request.html` — **Request form** | Clients (public) | Name, phone, address or "use my current location", problem. Creates a ticket. |
+| `login.html` | Everyone | Log in; creates the first admin on a fresh local install. |
 
----
+Roles: **admin** (everything), **dispatcher** (tickets, assigning, payouts), **technician** (own jobs and location only).
 
-## 🛠️ Project Directory Tree Structure
+### How assigning works
+1. Select a ticket. The panel lists technicians: **available first, then by distance** from the client. Distance uses the technician's live GPS if it is less than 2 hours old, otherwise their base address.
+2. Click **Assign**. The job is sent on the technician's channel with the client's name, phone, address, problem and a **Google Maps directions link**, plus a link to their technician page.
+3. The technician becomes *Busy*; they go back to *Available* automatically when their last open job is closed.
 
-```text
-lock_mess/
-├── backend/
-│   ├── test/
-│   │   └── api.test.js  # Endpoint + split-math tests (npm test)
-│   ├── package.json     # Render build ecosystem dependencies
-│   └── server.js        # Core Node.js express engine
-├── frontend/
-│   └── index.html       # Standalone user interface dashboard
-└── .gitignore           # Runtime security credentials block
-```
+Channels without keys run in **mock mode**: the message is logged on the server instead of sent, and the dashboard says so.
 
 ---
 
-## 🚀 Native Local Deployment Quickstart
+## Deploying (Render + Vercel)
 
-### Prerequisite Dependencies
-Ensure you have [Node.js](https://nodejs.org) installed locally.
+### 1. Create a free Postgres database
+Without one, everything is lost whenever Render restarts. Either:
+* **Neon** — [neon.tech](https://neon.tech) → New project → copy the *connection string*.
+* **Supabase** — [supabase.com](https://supabase.com) → New project → Project Settings → Database → *Connection string* (URI).
 
-### 1. Fire Up the REST Server Backend
+### 2. Render → your backend service → Environment
+
+| Variable | Required | Value |
+|---|---|---|
+| `DATABASE_URL` | ✅ | The Postgres connection string from step 1. |
+| `APP_SECRET` | ✅ | A long random string (40+ characters). Signs logins and encrypts saved API keys. **Don't change it later**, or saved keys must be re-entered. |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | ✅ first time | Creates the first admin login if none exists. You can remove them afterwards. |
+| `ADMIN_NAME` | | Display name for that admin. |
+| `CORS_ORIGIN` | recommended | `https://lockmess-frontend.vercel.app` |
+| `SEED_DEMO` | | `false` to start without the demo technicians and tickets. |
+
+Integration keys are best entered on the **Settings** page. The older variables (`WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_TEST_RECIPIENT`, `DISCORD_WEBHOOK_URL`, …) still work as fallbacks.
+
+### 3. First login
+Open the dashboard, log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`, then:
+1. **Settings → Company**: click *Use this site* for the dashboard address (used in links sent to technicians).
+2. **Settings → iMessage / WhatsApp / Discord**: paste your keys.
+3. **Settings → Users**: add dispatchers.
+4. **Technicians**: add your technicians and give each a GPS-page login. Delete the *(demo)* ones.
+5. Share `request.html` with clients (website button, Google Business profile, etc.).
+
+---
+
+## Running locally
+
 ```bash
 cd backend
 npm install
-node server.js
+npm start            # http://localhost:5000, data saved to backend/data/lockops.json
 ```
-*The service initializes an active local event loop engine tracking on `http://localhost:5000`.*
+Open `frontend/login.html` (or serve the folder) — it talks to `localhost:5000` automatically and lets you create the first admin. Add `?api=https://…` to any page to point it at another backend.
 
-### 2. Launch the Web Interface Frontend
-Simply locate and double-click `frontend/index.html` on your filesystem or run a local browser asset server to spin up the dispatcher command control workspace.
-
-When opened locally the dashboard talks to `http://localhost:5000`; the deployed site defaults to `https://lock-ops-backend.onrender.com`. To use a different backend, open it with `?api=https://your-backend.onrender.com` or click **⚙️ API** in the header (the setting is remembered in your browser).
-
-### 3. Run the tests
 ```bash
-cd backend
-npm test
+npm test             # API tests (node:test)
 ```
 
 ---
 
-## 🔧 Backend Configuration (`backend/.env`)
+## API overview
 
-All variables are optional.
+All routes are under `/api`; everything except `health`, `auth/*` and `public/*` needs `Authorization: Bearer <token>` from `POST /api/auth/login`.
 
-| Variable | Purpose |
+| Area | Endpoints |
 |---|---|
-| `PORT` | Port to listen on (default `5000`; Render sets this for you). |
-| `DISPATCH_API_KEY` | When set, every `/api/*` call except `/api/health` must send it in an `X-API-Key` header. Enter the same key under **⚙️ API** in the dashboard. Strongly recommended for any public deployment. |
-| `CORS_ORIGIN` | Allowed frontend origin(s), comma-separated, e.g. `https://lockmess-frontend.vercel.app`. Defaults to `*`. |
-| `DISCORD_WEBHOOK_URL` | Discord channel webhook for dispatch alerts. Without it, alerts are only logged. |
-| `WHATSAPP_TOKEN` | WhatsApp Cloud API access token (Meta app → WhatsApp → API Setup). With `WHATSAPP_PHONE_NUMBER_ID`, enables real sends. |
-| `WHATSAPP_PHONE_NUMBER_ID` | The sender's *Phone number ID* from the same API Setup page (not the phone number itself). |
-| `WHATSAPP_TEST_RECIPIENT` | While testing, send every WhatsApp alert to this number (e.g. your own, `+20…`) instead of the technician's. Must be added as a recipient in API Setup. |
-| `WHATSAPP_TEMPLATE` | Template to send. Default `hello_world` (Meta's test template). Use your own approved template with 3 body variables: `{{1}}` job id, `{{2}}` address, `{{3}}` notes. Set to empty to send plain text (only delivered within 24 h of the technician messaging your number). |
-| `WHATSAPP_TEMPLATE_LANG` | Template language code, default `en_US`. |
-| `WHATSAPP_API_VERSION` | Graph API version, default `v23.0`. |
+| Auth | `GET auth/status` · `POST auth/setup` · `POST auth/login` · `GET auth/me` · `POST auth/password` |
+| Users (admin) | `GET/POST users` · `PUT/DELETE users/:id` |
+| Settings (admin) | `GET/PUT settings` — secrets are write-only and come back masked |
+| Technicians | `GET technicians` · `POST technicians` · `PUT/DELETE technicians/:id` (admin) |
+| Tickets | `GET tickets?scope=open\|all` · `POST tickets` · `GET/PUT/DELETE tickets/:id` · `GET tickets/:id/candidates` · `POST tickets/:id/assign` · `POST tickets/:id/unassign` · `POST tickets/:id/finalize` · `GET accounting/export-csv` |
+| Technician page | `GET me/jobs` · `POST me/location` · `PUT me/status` · `POST me/jobs/:id/status` |
+| Public | `GET public/info` · `POST public/requests` |
 
-> ⚠️ Orders are stored in memory and reset whenever the server restarts (which Render's free tier does often). Move them to a database before using this with real jobs.
+Payout math: `net = max(gross − parts, 0)`, `company = net × rate%`, `technician = gross − company`, rounded to cents.
 
-## 📡 API
-
-| Method | Endpoint | Body |
-|---|---|---|
-| `GET` | `/api/health` | — |
-| `GET` | `/api/orders` | — |
-| `POST` | `/api/dispatch/discord` | `{ orderId }` |
-| `POST` | `/api/dispatch/whatsapp` | `{ orderId }` |
-| `POST` | `/api/dispatcher/finalize-split` | `{ orderId, grossCollected?, partCost, customCompanyRate }` (rate 0–100). Closes the ticket; a closed ticket returns `409`. |
-| `GET` | `/api/accounting/export-csv` | — |
-
-Split math: `net = max(gross − parts, 0)`, `company = net × rate%`, `technician = gross − company` (so the technician is reimbursed for parts), all rounded to cents.
+## Limits worth knowing
+* Data is stored as one JSON document in Postgres: simple and fine for a small company, but run **one** backend instance.
+* Browsers pause GPS when the phone screen locks or the technician switches apps; the technician page resumes when reopened.
+* Addresses are placed on the map with OpenStreetMap's free geocoder; if one isn't found, edit it or enter coordinates.

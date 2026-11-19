@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request a locksmith</title>
+    <link rel="stylesheet" href="assets/app.css">
+    <style>
+        .wrap { max-width: 520px; margin: 0 auto; padding: 24px 16px 40px; }
+        h1 { font-size: 24px; font-weight: 900; letter-spacing: -.4px; }
+        .lead { color: var(--soft); margin: 6px 0 18px; }
+        .loc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+        .loc-ok { color: #34d399; font-weight: 700; }
+        .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+        .done { text-align: center; padding: 30px 10px; }
+        .done .num { font-family: ui-monospace, monospace; font-size: 28px; font-weight: 900; color: #a5b4fc; margin: 8px 0; }
+        .seg { display: flex; gap: 8px; }
+        .seg label { flex: 1; border: 1px solid var(--line-2); border-radius: 8px; padding: 10px; display: flex; gap: 8px; align-items: center; cursor: pointer; }
+        .seg input { width: auto; }
+    </style>
+</head>
+<body>
+    <main class="wrap">
+        <div class="card" id="form-card">
+            <h1 id="title">Request a locksmith</h1>
+            <p class="lead">Tell us what you need. We’ll text you as soon as a technician is on the way.</p>
+            <div id="banner" class="hidden"></div>
+            <form id="form" novalidate>
+                <div class="field"><label class="label" for="name">Your name</label><input id="name" autocomplete="name" required></div>
+                <div class="field"><label class="label" for="phone">Mobile number</label><input id="phone" type="tel" autocomplete="tel" placeholder="+1 555 123 4567" required></div>
+                <div class="field"><span class="label">Contact me by</span>
+                    <div class="seg"><label><input type="radio" name="contactBy" value="imessage" checked> iMessage / text</label><label><input type="radio" name="contactBy" value="whatsapp"> WhatsApp</label></div></div>
+                <div class="field"><label class="label" for="address">Address</label><input id="address" autocomplete="street-address" placeholder="Street, city, state ZIP">
+                    <div class="loc-row"><button type="button" class="btn btn-sm" id="loc-btn">📍 Use my current location</button><span class="small" id="loc-status"></span></div>
+                    <div class="field-hint">Sharing your location helps the technician find you faster.</div></div>
+                <div class="field"><label class="label" for="issue">What’s the problem?</label><textarea id="issue" placeholder="e.g. Locked out of my car at the parking garage, keys inside"></textarea></div>
+                <div class="hp" aria-hidden="true"><label>Website <input id="website" tabindex="-1" autocomplete="off"></label></div>
+                <button class="btn btn-primary btn-block" id="submit" style="padding:13px;font-size:15px">Send request</button>
+            </form>
+        </div>
+        <div class="card done hidden" id="done">
+            <h1>Request received ✅</h1>
+            <div class="num" id="ticket-num"></div>
+            <p class="lead">We’re finding the nearest technician and will contact you shortly. Keep your phone nearby.</p>
+        </div>
+    </main>
+    <script src="assets/app.js"></script>
+    <script>
+    (function () {
+        const { api, banner, $, esc } = LockOps;
+        let location_ = null;
+
+        api('/api/public/info', { noRedirect: true }).then(r => {
+            if (r.companyName) { $('#title').textContent = `Request a locksmith · ${r.companyName}`; document.title = `${r.companyName} · Request a locksmith`; }
+        }).catch(() => {});
+
+        $('#loc-btn').onclick = () => {
+            if (!('geolocation' in navigator)) { $('#loc-status').textContent = 'Location isn’t available on this device.'; return; }
+            $('#loc-status').textContent = 'Getting your location…';
+            navigator.geolocation.getCurrentPosition(p => {
+                location_ = { lat: p.coords.latitude, lng: p.coords.longitude };
+                $('#loc-status').innerHTML = `<span class="loc-ok">✓ Location added</span> <span class="muted">(±${Math.round(p.coords.accuracy)} m)</span>`;
+            }, err => {
+                $('#loc-status').textContent = err.code === 1 ? 'Permission denied — please type your address instead.' : 'Couldn’t get your location — please type your address.';
+            }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 });
+        };
+
+        $('#form').addEventListener('submit', async e => {
+            e.preventDefault();
+            const body = {
+                name: $('#name').value, phone: $('#phone').value, address: $('#address').value, issue: $('#issue').value,
+                contactBy: document.querySelector('[name=contactBy]:checked').value, website: $('#website').value,
+                location: location_ || undefined,
+            };
+            if (!body.name.trim()) return banner($('#banner'), 'Please enter your name.');
+            if (!body.phone.trim()) return banner($('#banner'), 'Please enter your mobile number.');
+            if (!body.address.trim() && !location_) return banner($('#banner'), 'Please enter your address or tap “Use my current location”.');
+            $('#submit').disabled = true;
+            try {
+                const r = await api('/api/public/requests', { method: 'POST', body, noRedirect: true });
+                $('#form-card').classList.add('hidden');
+                $('#done').classList.remove('hidden');
+                $('#ticket-num').textContent = r.ticketId ? `Request #${r.ticketId}` : '';
+            } catch (err) { banner($('#banner'), esc(err.message)); }
+            finally { $('#submit').disabled = false; }
+        });
+    })();
+    </script>
+</body>
+</html>
