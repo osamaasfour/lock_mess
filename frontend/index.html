@@ -82,6 +82,10 @@
                     <div class="card-head"><h2>Tickets</h2><span class="spacer"></span><span class="small muted" id="count"></span></div>
                     <div id="ticket-list"><div class="empty">Loading…</div></div>
                 </div>
+                <div class="card hidden" id="inbox-card">
+                    <div class="card-head"><h2>Other messages</h2><span class="spacer"></span><span class="small muted">Not linked to an open job</span></div>
+                    <div id="inbox"></div>
+                </div>
             </div>
             <aside class="card panel" id="panel"><div class="empty">Select a ticket to see details and the nearest technicians.</div></aside>
         </div>
@@ -112,6 +116,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <script src="assets/app.js"></script>
+    <script src="assets/conversation.js"></script>
     <script>
     (async function () {
         const { api, toast, banner, $, esc, money, round2, ago } = LockOps;
@@ -408,6 +413,22 @@
             }
         }
 
+        // Messages from technicians with no open job (e.g. "I'm free").
+        async function loadInbox() {
+            try {
+                const { messages } = await api('/api/messages/unlinked');
+                $('#inbox-card').classList.toggle('hidden', !messages.length);
+                $('#inbox').innerHTML = messages.map(m => `<div class="row" style="padding:8px 0;border-bottom:1px solid var(--line)">
+                    <div style="flex:1;min-width:0"><b>${esc(m.technician || m.from || 'Unknown')}</b> <span class="small muted">· ${esc(m.channel)} · ${ago(m.at)}</span><div>${esc(m.text)}</div></div>
+                    <button type="button" class="btn btn-sm" data-dismiss="${esc(m.id)}">Dismiss</button></div>`).join('');
+            } catch {}
+        }
+        $('#inbox').addEventListener('click', async e => {
+            const id = e.target.closest('[data-dismiss]')?.dataset.dismiss;
+            if (!id) return;
+            try { await api(`/api/messages/${id}/dismiss`, { method: 'POST' }); loadInbox(); } catch (err) { toast(err.message, 'error'); }
+        });
+
         $('#scope').onchange = refresh;
         $('#search').oninput = renderList;
         $('#refresh-btn').onclick = refresh;
@@ -421,6 +442,8 @@
 
         const deepLink = new URLSearchParams(location.search).get('ticket');
         await refresh();
+        loadInbox();
+        setInterval(() => { if (!document.hidden) loadInbox(); }, 20000);
         if (deepLink && tickets.some(t => t.id === deepLink)) select(deepLink);
         setInterval(() => { if (!document.hidden && !dlg.open) refresh(); }, 15000);
     })();

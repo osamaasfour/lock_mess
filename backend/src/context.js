@@ -6,6 +6,8 @@ const { createChannels } = require('./channels');
 const { createDispatch } = require('./dispatch');
 const { createGeocoder } = require('./geo');
 const { seedDemo } = require('./seed');
+const { createMessaging } = require('./messaging');
+const { mountMessaging, webhookUrls } = require('./messaging-routes');
 
 // Builds everything the app needs. Tests pass their own env, http stub, geocoder and store.
 async function createContext({ env = process.env, http = axios, store, geocode, log = console } = {}) {
@@ -48,7 +50,12 @@ async function createContext({ env = process.env, http = axios, store, geocode, 
         log.warn('[config] Data is NOT persistent on this server. Set DATABASE_URL to a Postgres database.');
     }
 
-    return { store, keys, settings, channels, dispatch, config, http, log, geocode: geocode || createGeocoder(http) };
+    const ctx = { store, keys, settings, channels, dispatch, config, http, log, geocode: geocode || createGeocoder(http) };
+    ctx.messaging = createMessaging(ctx);
+    ctx.webhookUrls = webhookUrls(ctx);
+    ctx.mount = (app, helpers) => mountMessaging(app, helpers, ctx);
+    ctx.stop = () => ctx.messaging.stopPolling();
+    return ctx;
 }
 
 module.exports = { createContext };
