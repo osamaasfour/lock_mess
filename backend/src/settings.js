@@ -9,6 +9,7 @@ const SCHEMA = {
         defaultCompanyRate: { default: '30' },
         defaultCountryCode: { default: '1' }, // used when a phone number is typed without +country code
         frontendUrl: { env: 'FRONTEND_URL', default: '' },
+        autoReply: { default: 'on', options: ['on', 'off'] }, // confirm new requests that arrive by message
     },
     whatsapp: {
         token: { secret: true, env: 'WHATSAPP_TOKEN' },

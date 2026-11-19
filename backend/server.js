@@ -5,6 +5,7 @@ const { createApp } = require('./src/app');
 async function main() {
     const ctx = await createContext();
     const app = createApp(ctx);
+    ctx.messaging.startPolling(); // reads technician replies from Discord job threads (bot mode only)
     const port = process.env.PORT || 5000;
     const server = app.listen(port, () => {
         console.log(`🚀 Lock-Ops API on port ${port} (storage: ${ctx.store.driver.kind}${ctx.store.driver.persistent ? '' : ', NOT persistent'})`);

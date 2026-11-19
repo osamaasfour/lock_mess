@@ -147,8 +147,12 @@ function createDispatch({ store, settings, channels }) {
         return res;
     }
 
+    // Messaging plugs in here to remember who we last wrote to (so replies find their ticket).
+    const hooks = { onRecord: null };
     function recordMessage(m) {
-        return store.insert('messages', { at: new Date().toISOString(), ...m });
+        const row = store.insert('messages', { at: new Date().toISOString(), ...m });
+        if (hooks.onRecord) hooks.onRecord(row);
+        return row;
     }
 
     async function assign(ticket, tech, { notify = true, author } = {}) {
@@ -190,7 +194,7 @@ function createDispatch({ store, settings, channels }) {
     }
 
     return {
-        technicianView, ticketView, candidates, createTicket, assign, notifyTechnician, recordMessage,
+        hooks, technicianView, ticketView, candidates, createTicket, assign, notifyTechnician, recordMessage,
         finalize, releaseIfIdle, findOpenTicketForClient, dispatchText, techPosition,
     };
 }

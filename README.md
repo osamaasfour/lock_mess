@@ -27,6 +27,19 @@ Roles: **admin** (everything), **dispatcher** (tickets, assigning, payouts), **t
 
 Channels without keys run in **mock mode**: the message is logged on the server instead of sent, and the dashboard says so.
 
+### Messages (two-way)
+Each ticket has a **Client** and a **Technician** conversation in the dispatch panel. Dispatchers read replies and answer from there; unread counts show on the ticket list.
+
+| Channel | Clients | Technicians | Location |
+|---|---|---|---|
+| **iMessage** (Sendblue; SMS fallback for Android) | ✅ send & receive | ✅ send & receive | Map links in a message (Apple/Google Maps) are read; iMessage "Share My Location" cards are read when Sendblue passes them on (best effort) |
+| **WhatsApp** | ✅ send & receive | ✅ send & receive | Shared WhatsApp locations update the client pin / technician position; the client's location goes to the technician as a native pin when allowed |
+| **Discord** | — | ✅ with a bot: one thread per job, replies polled every 8 s | Map links in replies are read |
+
+How an incoming message finds its ticket: a reply within 3 days follows the last conversation we started with that number; otherwise a technician's number goes to their newest open job; otherwise a client's number goes to their open ticket — and an **unknown number creates a new ticket** (with an automatic "we received your request #…" reply, switchable in Settings). Technician messages with no open job appear under **Other messages** on the dispatch page.
+
+WhatsApp rule: free-text messages only reach someone who messaged you in the last 24 h. Job alerts therefore use your approved template; once the technician or client replies, normal chat works for 24 h.
+
 ---
 
 ## Deploying (Render + Vercel)
@@ -57,6 +70,11 @@ Open the dashboard, log in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`, then:
 4. **Technicians**: add your technicians and give each a GPS-page login. Delete the *(demo)* ones.
 5. Share `request.html` with clients (website button, Google Business profile, etc.).
 
+### 4. Connect replies (Settings → *Receiving replies* shows the exact URLs)
+* **iMessage (Sendblue):** Sendblue dashboard → API Keys → copy the key ID and secret into Settings. Then Sendblue → Webhooks → *Receive* → paste the **Receive webhook URL**.
+* **WhatsApp:** Settings → WhatsApp: token, phone number ID and **App secret** (Meta app → App settings → Basic). Then Meta app → WhatsApp → Configuration → Webhook → *Edit*: paste the **Callback URL** and **Verify token**, save, and subscribe to **messages**.
+* **Discord:** discord.com/developers → New Application → *Bot* → Reset Token (copy it) and turn on **Message Content Intent** → *OAuth2 → URL Generator*: scope `bot`, permissions *View Channels, Send Messages, Create Public Threads, Send Messages in Threads, Read Message History* → open the link and add the bot to your server. In Settings → Discord paste the bot token and the dispatch channel ID. Technicians' Discord user IDs go on the Technicians page.
+
 ---
 
 ## Running locally
@@ -86,6 +104,8 @@ All routes are under `/api`; everything except `health`, `auth/*` and `public/*`
 | Technicians | `GET technicians` · `POST technicians` · `PUT/DELETE technicians/:id` (admin) |
 | Tickets | `GET tickets?scope=open\|all` · `POST tickets` · `GET/PUT/DELETE tickets/:id` · `GET tickets/:id/candidates` · `POST tickets/:id/assign` · `POST tickets/:id/unassign` · `POST tickets/:id/finalize` · `GET accounting/export-csv` |
 | Technician page | `GET me/jobs` · `POST me/location` · `PUT me/status` · `POST me/jobs/:id/status` |
+| Messages | `GET/POST tickets/:id/messages` (`{ party: "client"\|"technician", text }`) · `POST tickets/:id/read` · `POST tickets/:id/send-location` · `GET messages/unlinked` · `POST messages/:id/dismiss` |
+| Webhooks | `GET/POST webhooks/whatsapp` (Meta signature checked with the App secret) · `POST webhooks/sendblue/:secret` |
 | Public | `GET public/info` · `POST public/requests` |
 
 Payout math: `net = max(gross − parts, 0)`, `company = net × rate%`, `technician = gross − company`, rounded to cents.
